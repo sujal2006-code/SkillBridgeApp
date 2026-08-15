@@ -1,3 +1,5 @@
+import os
+import shutil
 from typing import List, Union
 import json
 from pydantic import field_validator
@@ -41,11 +43,26 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        if self.DATABASE_URL:
+        # If explicit PostgreSQL or non-relative SQLite URL is set
+        if self.DATABASE_URL and not self.DATABASE_URL.startswith("sqlite:///."):
             return self.DATABASE_URL
         if self.POSTGRES_SERVER and self.POSTGRES_USER and self.POSTGRES_PASSWORD and self.POSTGRES_DB:
             return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        return "sqlite:///./skillbridge.db"
+        
+        # If in Vercel or AWS Lambda serverless read-only environment
+        if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            tmp_db = "/tmp/skillbridge.db"
+            if not os.path.exists(tmp_db):
+                for candidate in ["skillbridge.db", "backend/skillbridge.db", "../backend/skillbridge.db"]:
+                    if os.path.exists(candidate):
+                        try:
+                            shutil.copy2(candidate, tmp_db)
+                            break
+                        except Exception:
+                            pass
+            return f"sqlite:///{tmp_db}"
+
+        return self.DATABASE_URL or "sqlite:///./skillbridge.db"
 
     model_config = SettingsConfigDict(
         env_file=".env",

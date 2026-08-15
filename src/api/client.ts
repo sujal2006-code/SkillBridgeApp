@@ -5,7 +5,24 @@
  * Configurable via VITE_API_URL environment variable with fallback to http://127.0.0.1:8000
  */
 
-const API_BASE_URL = ((import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+const getBaseUrl = () => {
+  const envUrl = ((import.meta as any).env?.VITE_API_URL as string | undefined)?.trim();
+  const isProd = (import.meta as any).env?.PROD;
+
+  if (isProd) {
+    // In production, only use VITE_API_URL if it is an explicit public remote URL (not localhost)
+    if (envUrl && !envUrl.includes('127.0.0.1') && !envUrl.includes('localhost')) {
+      return envUrl.replace(/\/+$/, '');
+    }
+    // Default to same-origin relative path for Vercel unified deployment
+    return '';
+  }
+
+  // In local development, connect to local FastAPI server
+  return (envUrl || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+};
+
+const API_BASE_URL = getBaseUrl();
 
 export class ApiError extends Error {
   public status: number;
