@@ -1,0 +1,6 @@
+{
+  "name": "SkillBridge",
+  "description": "AI-powered skill verification platform and digital skill passport connecting students with verified opportunities and teams.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
