@@ -1,4 +1,5 @@
 export type ScreenType = 
+  | 'login'
   | 'landing' 
   | 'passport' 
   | 'dashboard' 
@@ -60,6 +61,7 @@ export interface ApiEvidence {
   evidence_url?: string | null;
   created_at?: string | null;
   skill?: ApiSkill | null;
+  student?: ApiStudent | null;
 }
 
 export interface ApiInternshipSkill {
@@ -138,9 +140,18 @@ export interface ApiStudent {
   email: string;
   university: string;
   graduation_year: number;
+  last_screen?: string | null;
+  last_state_json?: string | null;
   created_at?: string | null;
   skills?: ApiStudentSkill[];
   evidence?: ApiEvidence[];
+}
+
+export interface ApiStudentLoginResponse {
+  student: ApiStudent;
+  token: string;
+  message: string;
+  last_screen: string;
 }
 
 export interface ApiTeamMember {

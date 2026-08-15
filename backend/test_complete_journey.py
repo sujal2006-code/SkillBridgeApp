@@ -53,9 +53,11 @@ def run_tests():
     print("[PASS] 1. Backend API is online and healthy.")
 
     # 2. Student Onboarding: Sujal
+    import time
+    ts = int(time.time())
     onboard_payload = {
-        "name": "Sujal Demo User",
-        "email": "sujal.demo@example.edu",
+        "name": f"Sujal Demo User {ts}",
+        "email": f"sujal.demo.{ts}@example.edu",
         "university": "State University of Technology"
     }
     status, sujal = http_request(f"{BASE_URL}/students/onboard", method="POST", data=onboard_payload)

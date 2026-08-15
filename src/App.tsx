@@ -11,6 +11,7 @@ import {
   ApiRecommendation,
   ApiTeamCandidateRecommendation,
   ApiActivity,
+  ApiStudentLoginResponse,
 } from './types';
 import {
   studentsApi,
@@ -25,8 +26,8 @@ import { BottomNav } from './components/layout/BottomNav';
 import { EvidenceModal } from './components/common/EvidenceModal';
 import { MatchModal } from './components/common/MatchModal';
 import { Toast } from './components/common/Toast';
-import { OnboardingModal } from './components/common/OnboardingModal';
 
+import { LoginView } from './views/LoginView';
 import { LandingView } from './views/LandingView';
 import { PassportView } from './views/PassportView';
 import { StudentDashboardView } from './views/StudentDashboardView';
@@ -54,13 +55,18 @@ const AVATAR_LIST = [
 ];
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<ScreenType>('landing');
-  const [activeStudentId, setActiveStudentId] = useState<number>(() => {
-    const saved = localStorage.getItem('skillbridge_student_id');
-    return saved ? Number(saved) : 1;
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return localStorage.getItem('skillbridge_auth_token');
   });
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
-    return !localStorage.getItem('skillbridge_student_name');
+  const [activeStudentId, setActiveStudentId] = useState<number | null>(() => {
+    const saved = localStorage.getItem('skillbridge_student_id');
+    return saved ? Number(saved) : null;
+  });
+  const [currentScreen, setCurrentScreen] = useState<ScreenType>(() => {
+    const token = localStorage.getItem('skillbridge_auth_token');
+    if (!token) return 'login';
+    const savedScreen = localStorage.getItem('skillbridge_last_screen') as ScreenType;
+    return savedScreen && savedScreen !== 'login' ? savedScreen : 'dashboard';
   });
   const [adminToken, setAdminToken] = useState<string | null>(() => {
     return localStorage.getItem('skillbridge_admin_token');
@@ -78,7 +84,9 @@ export default function App() {
   const [totalStudentsCount, setTotalStudentsCount] = useState<number>(1);
 
   // Status & loading states
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    return !!localStorage.getItem('skillbridge_auth_token');
+  });
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Modals & Toast state
@@ -345,23 +353,69 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadBackendData(activeStudentId);
-  }, [loadBackendData, activeStudentId]);
-
-  // Onboarding Complete Handler
-  const handleOnboardingComplete = async (name: string) => {
-    try {
-      const onboarded = await studentsApi.onboardStudent(name);
-      setActiveStudentId(onboarded.id);
-      localStorage.setItem('skillbridge_student_id', String(onboarded.id));
-      localStorage.setItem('skillbridge_student_name', onboarded.name);
-      setShowOnboarding(false);
-      await loadBackendData(onboarded.id);
-      setCurrentScreen('dashboard');
-      showToast(`Welcome to SkillBridge, ${onboarded.name}!`);
-    } catch (err: any) {
-      showToast(err.message || 'Failed to complete onboarding.', 'error');
+    if (activeStudentId && authToken) {
+      loadBackendData(activeStudentId);
+    } else {
+      setIsLoading(false);
     }
+  }, [loadBackendData, activeStudentId, authToken]);
+
+  // Navigation handler that persists current screen to backend and localStorage
+  const handleNavigate = (screen: ScreenType) => {
+    if (screen === 'admin' && !adminToken) {
+      setCurrentScreen('admin-login');
+      return;
+    }
+    setCurrentScreen(screen);
+    if (screen !== 'login' && screen !== 'admin-login') {
+      localStorage.setItem('skillbridge_last_screen', screen);
+      if (activeStudentId) {
+        studentsApi.updateStudentState(activeStudentId, screen).catch(() => {});
+      }
+    }
+  };
+
+  // Login Success Handler
+  const handleLoginSuccess = async (authData: ApiStudentLoginResponse) => {
+    const studentId = authData.student.id;
+    setAuthToken(authData.token);
+    setActiveStudentId(studentId);
+    localStorage.setItem('skillbridge_auth_token', authData.token);
+    localStorage.setItem('skillbridge_student_id', String(studentId));
+    localStorage.setItem('skillbridge_student_name', authData.student.name);
+
+    // Resume exact screen where user last discontinued
+    const backendScreen = authData.last_screen as ScreenType;
+    const localScreen = localStorage.getItem('skillbridge_last_screen') as ScreenType;
+    const resumeScreen = (backendScreen && backendScreen !== 'login')
+      ? backendScreen
+      : (localScreen && localScreen !== 'login')
+        ? localScreen
+        : 'dashboard';
+
+    localStorage.setItem('skillbridge_last_screen', resumeScreen);
+    setCurrentScreen(resumeScreen);
+
+    await loadBackendData(studentId);
+    showToast(authData.message || `Welcome back, ${authData.student.name}!`);
+  };
+
+  // Logout Handler
+  const handleLogout = () => {
+    localStorage.removeItem('skillbridge_auth_token');
+    localStorage.removeItem('skillbridge_student_id');
+    localStorage.removeItem('skillbridge_student_name');
+    localStorage.removeItem('skillbridge_last_screen');
+    setAuthToken(null);
+    setActiveStudentId(null);
+    setStudent(null);
+    setSkills([]);
+    setEvidenceList([]);
+    setInternships([]);
+    setCandidates([]);
+    setActivities([]);
+    setCurrentScreen('login');
+    showToast('Logged out successfully.', 'info');
   };
 
   // Handler: Add new evidence (Status: PENDING)
@@ -381,7 +435,9 @@ export default function App() {
     };
 
     setEvidenceList([newEvidence, ...evidenceList]);
-    await loadBackendData(activeStudentId);
+    if (activeStudentId) {
+      await loadBackendData(activeStudentId);
+    }
     showToast(`Evidence "${newEvidenceData.title}" submitted. Status: PENDING VERIFICATION.`);
   };
 
@@ -395,7 +451,7 @@ export default function App() {
     }));
 
     const appliedItem = internships.find(i => i.id === internshipId);
-    if (appliedItem) {
+    if (appliedItem && activeStudentId) {
       try {
         await activitiesApi.createActivity({
           student_id: activeStudentId,
@@ -438,7 +494,9 @@ export default function App() {
           status: 'invited',
         });
 
-        await loadBackendData(activeStudentId);
+        if (activeStudentId) {
+          await loadBackendData(activeStudentId);
+        }
       } catch {
         // Keep optimistic update
       }
@@ -454,7 +512,9 @@ export default function App() {
     if (apiId) {
       try {
         await adminApi.approveEvidence(apiId);
-        await loadBackendData(activeStudentId);
+        if (activeStudentId) {
+          await loadBackendData(activeStudentId);
+        }
         showToast('Evidence approved! Verified competency added to student passport.');
       } catch (err: any) {
         showToast(err.message || 'Failed to approve evidence.', 'error');
@@ -468,7 +528,9 @@ export default function App() {
     if (apiId) {
       try {
         await adminApi.rejectEvidence(apiId);
-        await loadBackendData(activeStudentId);
+        if (activeStudentId) {
+          await loadBackendData(activeStudentId);
+        }
         showToast('Evidence rejected / flagged for student resubmission.', 'info');
       } catch (err: any) {
         showToast(err.message || 'Failed to reject evidence.', 'error');
@@ -501,28 +563,37 @@ export default function App() {
   // Dynamic Passport completion percentage (0 skills = 0%, 1 = 20%, 2 = 40%, 3 = 60%, 4 = 80%, 5+ = 100%)
   const completionPercentage = Math.min(100, verifiedSkillsCount * 20);
 
+  // If user is not authenticated or explicitly on login screen, render LoginView
+  if (currentScreen === 'login' || !authToken) {
+    return (
+      <div className="min-h-screen bg-[#f7f9fb] text-[#191c1e] flex flex-col font-['Inter',sans-serif]">
+        <LoginView onLoginSuccess={handleLoginSuccess} />
+        <Toast
+          message={toastMessage}
+          type={toastType}
+          onClose={() => setToastMessage(null)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f7f9fb] text-[#191c1e] flex flex-col font-['Inter',sans-serif]">
       {/* Top Navbar */}
       <Navbar
         currentScreen={currentScreen}
-        onNavigate={(screen) => {
-          if (screen === 'admin' && !adminToken) {
-            setCurrentScreen('admin-login');
-          } else {
-            setCurrentScreen(screen);
-          }
-        }}
+        onNavigate={handleNavigate}
         pendingCount={pendingQueueCount}
         studentName={student?.name || localStorage.getItem('skillbridge_student_name') || 'Student'}
-        onSwitchStudent={() => setShowOnboarding(true)}
+        onSwitchStudent={handleLogout}
+        onLogout={handleLogout}
         isAdminAuthenticated={!!adminToken}
       />
 
       {/* Screen Render */}
       <div className="flex-1">
         {currentScreen === 'landing' && (
-          <LandingView onNavigate={setCurrentScreen} />
+          <LandingView onNavigate={handleNavigate} />
         )}
 
         {currentScreen === 'passport' && (
@@ -531,8 +602,8 @@ export default function App() {
             evidenceList={evidenceList}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => loadBackendData(activeStudentId)}
-            onNavigate={setCurrentScreen}
+            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
+            onNavigate={handleNavigate}
             onOpenEvidence={setSelectedEvidence}
           />
         )}
@@ -549,8 +620,8 @@ export default function App() {
             completionPercentage={completionPercentage}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => loadBackendData(activeStudentId)}
-            onNavigate={setCurrentScreen}
+            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
+            onNavigate={handleNavigate}
             onSelectInternship={(internship) => {
               setSelectedMatchItem(internship);
             }}
@@ -562,10 +633,10 @@ export default function App() {
             internships={internships}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => loadBackendData(activeStudentId)}
+            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
             onApply={handleApplyInternship}
             onOpenMatchModal={setSelectedMatchItem}
-            onNavigate={setCurrentScreen}
+            onNavigate={handleNavigate}
           />
         )}
 
@@ -575,18 +646,18 @@ export default function App() {
             candidates={candidates}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => loadBackendData(activeStudentId)}
+            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
             onInviteCandidate={handleInviteCandidate}
             onOpenMatchModal={setSelectedMatchItem}
-            onNavigate={setCurrentScreen}
+            onNavigate={handleNavigate}
           />
         )}
 
         {currentScreen === 'add-evidence' && (
           <AddEvidenceView
-            studentId={activeStudentId}
+            studentId={activeStudentId || 1}
             onAddEvidence={handleAddEvidence}
-            onNavigate={setCurrentScreen}
+            onNavigate={handleNavigate}
           />
         )}
 
@@ -597,7 +668,7 @@ export default function App() {
               setCurrentScreen('admin');
               showToast('Admin logged in successfully!');
             }}
-            onNavigate={setCurrentScreen}
+            onNavigate={handleNavigate}
           />
         )}
 
@@ -609,7 +680,7 @@ export default function App() {
             isLoading={isLoading}
             onApprove={handleApproveQueue}
             onReject={handleRejectQueue}
-            onNavigate={setCurrentScreen}
+            onNavigate={handleNavigate}
             onViewSnippet={handleViewSnippet}
             onLogout={() => {
               localStorage.removeItem('skillbridge_admin_token');
@@ -624,20 +695,7 @@ export default function App() {
       {/* Shared Mobile Bottom Navigation */}
       <BottomNav
         currentScreen={currentScreen}
-        onNavigate={(screen) => {
-          if (screen === 'admin' && !adminToken) {
-            setCurrentScreen('admin-login');
-          } else {
-            setCurrentScreen(screen);
-          }
-        }}
-      />
-
-      {/* Onboarding Welcome Modal */}
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onComplete={handleOnboardingComplete}
-        isLoading={isLoading}
+        onNavigate={handleNavigate}
       />
 
       {/* Reusable Modals */}

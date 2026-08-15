@@ -12,6 +12,9 @@ class Student(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     university = Column(String(255), nullable=False)
     graduation_year = Column(Integer, nullable=False)
+    password_hash = Column(String(255), nullable=True)
+    last_screen = Column(String(50), nullable=True, default="dashboard")
+    last_state_json = Column(String(2000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

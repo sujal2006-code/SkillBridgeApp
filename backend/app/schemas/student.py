@@ -18,6 +18,8 @@ class StudentCreate(StudentBase):
 
 class StudentRead(StudentBase):
     id: int
+    last_screen: Optional[str] = "dashboard"
+    last_state_json: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -28,3 +30,22 @@ class StudentDetailRead(StudentRead):
     evidence: List[EvidenceRead] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class StudentLoginRequest(BaseModel):
+    name: str
+    password: str
+    mode: Optional[str] = "auto"  # 'login' | 'register' | 'auto'
+
+
+class StudentUpdateStateRequest(BaseModel):
+    last_screen: Optional[str] = None
+    last_state_json: Optional[str] = None
+
+
+class StudentLoginResponse(BaseModel):
+    student: StudentDetailRead
+    token: str
+    message: str
+    last_screen: str
+

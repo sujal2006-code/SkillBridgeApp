@@ -7,6 +7,7 @@ interface NavbarProps {
   pendingCount: number;
   studentName?: string;
   onSwitchStudent?: () => void;
+  onLogout?: () => void;
   isAdminAuthenticated?: boolean;
 }
 
@@ -16,6 +17,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   pendingCount,
   studentName = 'Alex Rivera',
   onSwitchStudent,
+  onLogout,
   isAdminAuthenticated = false,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -33,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-[1280px] mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
         {/* Brand Logo */}
         <div 
-          onClick={() => onNavigate('landing')}
+          onClick={() => onNavigate('dashboard')}
           className="flex items-center gap-2.5 cursor-pointer group"
           id="nav-brand-logo"
         >
@@ -154,6 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
               title={`${studentName} (Active Student Profile)`}
+              id="user-profile-menu-button"
             >
               <div className="w-7 h-7 rounded-full bg-[#dae2fd] text-[#131b2e] flex items-center justify-center font-bold text-xs">
                 {initials}
@@ -168,7 +171,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {showUserMenu && (
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-fadeIn text-xs">
                 <div className="px-4 py-2 border-b border-slate-100">
-                  <p className="font-bold text-slate-900">{studentName}</p>
+                  <p className="font-bold text-slate-900 truncate">{studentName}</p>
                   <p className="text-[11px] text-slate-400">Student Skill Passport</p>
                 </div>
                 <div className="py-1">
@@ -191,7 +194,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[16px] text-purple-600">switch_account</span>
-                      <span>Switch / New Student</span>
+                      <span>Switch Account</span>
+                    </button>
+                  )}
+                  {onLogout && (
+                    <button
+                      id="navbar-logout-button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onLogout();
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 font-medium flex items-center gap-2 border-t border-slate-100 mt-1"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">logout</span>
+                      <span>Log Out</span>
                     </button>
                   )}
                 </div>
@@ -203,3 +219,5 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+
+

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { ApiStudent } from '../types';
+import { ApiStudent, ApiStudentLoginResponse } from '../types';
 
 export interface CreateStudentPayload {
   name: string;
@@ -36,4 +36,22 @@ export const studentsApi = {
   onboardStudent: (name: string, email?: string, university?: string) => {
     return apiClient.post<ApiStudent>('/api/students/onboard', { name, email, university });
   },
+
+  /**
+   * Secure login or account registration with password
+   */
+  loginStudent: (name: string, password: string, mode: 'login' | 'register' | 'auto' = 'auto') => {
+    return apiClient.post<ApiStudentLoginResponse>('/api/students/login', { name, password, mode });
+  },
+
+  /**
+   * Persist current student navigation and workflow state to resume seamlessly
+   */
+  updateStudentState: (studentId: number, lastScreen: string, lastStateJson?: string) => {
+    return apiClient.patch<ApiStudent>(`/api/students/${studentId}/state`, {
+      last_screen: lastScreen,
+      last_state_json: lastStateJson,
+    });
+  },
 };
+

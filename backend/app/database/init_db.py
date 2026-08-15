@@ -8,10 +8,26 @@ from app.models.internship import Internship, InternshipSkill
 from app.models.match import Match
 
 
+from sqlalchemy import inspect, text
+from app.core.security import hash_password
+
+
 def init_db(db: Session) -> None:
     """Create all database tables and seed initial demo data if empty."""
     # 1. Create tables
     Base.metadata.create_all(bind=engine)
+
+    # 1b. Ensure new student columns exist if table was previously created
+    inspector = inspect(engine)
+    if "students" in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("students")]
+        with engine.begin() as conn:
+            if "password_hash" not in columns:
+                conn.execute(text("ALTER TABLE students ADD COLUMN password_hash VARCHAR(255)"))
+            if "last_screen" not in columns:
+                conn.execute(text("ALTER TABLE students ADD COLUMN last_screen VARCHAR(50) DEFAULT 'dashboard'"))
+            if "last_state_json" not in columns:
+                conn.execute(text("ALTER TABLE students ADD COLUMN last_state_json VARCHAR(2000)"))
 
     # 2. Seed Skills if not already present
     if db.query(Skill).count() == 0:
