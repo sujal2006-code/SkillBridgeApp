@@ -1,8 +1,10 @@
 from typing import List, Optional
 import time
+import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from app.database.session import get_db
 from app.models.student import Student
 from app.models.skill import StudentSkill
@@ -18,6 +20,8 @@ from app.schemas.student import (
 from app.core.security import (
     hash_password,
     verify_password,
+    validate_password_strength,
+    PASSWORD_VALIDATION_ERROR_MSG,
     create_access_token,
     get_current_student_id,
     get_optional_student_id,
@@ -32,16 +36,35 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
     Authenticate an existing student with password verification, or register a new student account.
     Returns student profile, cryptographically signed JWT token with student ID, and last state.
     """
-    name_clean = payload.name.strip()
+    # 1. Normalize identifier (strip whitespace, collapse multiple spaces)
+    name_clean = " ".join(payload.name.strip().split())
     password_clean = payload.password.strip()
 
-    if not name_clean or not password_clean:
+    if not name_clean:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Both student name and password are required.",
+            detail="Student name is required.",
         )
 
-    # Lookup student by name or email (case-insensitive)
+    if payload.mode == "login" and not password_clean:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Password is required.",
+        )
+
+
+    # 2. Derive email/name normalization variants for lookup
+    if "@" in name_clean:
+        normalized_email = name_clean.lower()
+        derived_email = normalized_email
+        display_name = name_clean.split("@")[0].replace(".", " ").title()
+    else:
+        display_name = name_clean
+        base_slug = re.sub(r"[^a-zA-Z0-9]+", ".", name_clean.lower()).strip(".")
+        derived_email = f"{base_slug}@skillbridge.edu"
+        normalized_email = derived_email
+
+    # 3. Lookup student by exact name, email, or normalized variants (case-insensitive)
     existing = (
         db.query(Student)
         .options(
@@ -49,17 +72,66 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
             joinedload(Student.evidence).joinedload(Evidence.skill),
         )
         .filter(
-            (Student.name.ilike(name_clean)) | (Student.email.ilike(name_clean))
+            (func.lower(Student.name) == name_clean.lower())
+            | (func.lower(Student.email) == name_clean.lower())
+            | (func.lower(Student.email) == derived_email.lower())
+            | (Student.name.ilike(name_clean))
+            | (Student.email.ilike(name_clean))
         )
         .first()
     )
 
-    if existing:
-        # If explicitly registering and account already has password, return error
-        if payload.mode == "register" and existing.password_hash:
+    # 4. Handle CREATE ACCOUNT / REGISTER mode
+    if payload.mode == "register":
+        # Check password strength first
+        is_valid_pwd, pwd_error = validate_password_strength(password_clean)
+        if not is_valid_pwd:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"An account for '{existing.name}' already exists. Please choose 'Log In' instead.",
+                detail=pwd_error,
+            )
+
+        # Check duplicate account
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account already exists. Please log in instead.",
+            )
+
+        # Create new student profile in persistent PostgreSQL
+        final_email = normalized_email
+        if db.query(Student).filter(Student.email == final_email).first():
+            final_email = f"{base_slug}.{int(time.time())}@skillbridge.edu"
+
+        new_student = Student(
+            name=display_name,
+            email=final_email,
+            university="SkillBridge Academic Network",
+            graduation_year=2027,
+            password_hash=hash_password(password_clean),
+            last_screen="dashboard",
+        )
+        db.add(new_student)
+        db.commit()
+        db.refresh(new_student)
+
+        new_student.skills = []
+        new_student.evidence = []
+
+        token = create_access_token(new_student.id)
+        return StudentLoginResponse(
+            student=new_student,
+            token=token,
+            message=f"Account created successfully. Welcome to SkillBridge, {new_student.name}!",
+            last_screen="dashboard",
+        )
+
+    # 5. Handle LOG IN mode
+    if payload.mode == "login":
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No account found for '{name_clean}'. Please select 'Create Account' to register.",
             )
 
         # Verify password if already set
@@ -70,7 +142,7 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
                     detail=f"Incorrect password for account '{existing.name}'. Please try again.",
                 )
         else:
-            # First-time password assignment for existing or seed student record
+            # First-time password assignment for demo or seed student record
             existing.password_hash = hash_password(password_clean)
             db.commit()
             db.refresh(existing)
@@ -84,28 +156,33 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
             last_screen=last_screen,
         )
 
-    # If student does not exist
-    if payload.mode == "login":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No account found for '{name_clean}'. Please select 'Create Account' to register.",
+    # 6. Handle AUTO mode (fallback)
+    if existing:
+        if existing.password_hash and not verify_password(password_clean, existing.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Incorrect password for account '{existing.name}'. Please try again.",
+            )
+        token = create_access_token(existing.id)
+        last_screen = existing.last_screen or "dashboard"
+        return StudentLoginResponse(
+            student=existing,
+            token=token,
+            message=f"Welcome back, {existing.name}!",
+            last_screen=last_screen,
         )
 
-    # Create new student profile
-    if "@" in name_clean:
-        email = name_clean.lower()
-        # Derive display name from email prefix if email provided as identifier
-        display_name = name_clean.split("@")[0].replace(".", " ").title()
-    else:
-        display_name = name_clean
-        base_email = name_clean.lower().replace(" ", ".")
-        email = f"{base_email}@skillbridge.edu"
-        if db.query(Student).filter(Student.email == email).first():
-            email = f"{base_email}.{int(time.time())}@skillbridge.edu"
+    # Auto-register if not existing in auto mode
+    is_valid_pwd, pwd_error = validate_password_strength(password_clean)
+    if not is_valid_pwd:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=pwd_error,
+        )
 
     new_student = Student(
         name=display_name,
-        email=email,
+        email=normalized_email,
         university="SkillBridge Academic Network",
         graduation_year=2027,
         password_hash=hash_password(password_clean),
@@ -115,7 +192,6 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
     db.commit()
     db.refresh(new_student)
 
-    # Load relationships
     new_student.skills = []
     new_student.evidence = []
 
@@ -126,6 +202,7 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
         message=f"Account created successfully. Welcome to SkillBridge, {new_student.name}!",
         last_screen="dashboard",
     )
+
 
 
 @router.get("/me", response_model=StudentDetailRead, summary="Retrieve authenticated student profile from verified token")

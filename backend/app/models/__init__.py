@@ -6,6 +6,7 @@ from .internship import Internship, InternshipSkill
 from .match import Match
 from .team import Team, TeamMember, TeamSkillRequirement
 from .activity import Activity
+from .otp import OTP
 
 __all__ = [
     "Student",
@@ -19,5 +20,7 @@ __all__ = [
     "TeamMember",
     "TeamSkillRequirement",
     "Activity",
+    "OTP",
 ]
+
 

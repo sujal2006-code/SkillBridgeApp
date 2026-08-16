@@ -49,3 +49,44 @@ class StudentLoginResponse(BaseModel):
     message: str
     last_screen: str
 
+
+class RegisterOtpRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    confirm_password: Optional[str] = None
+
+
+class VerifyRegisterOtpRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class ForgotPasswordOtpRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyResetOtpRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    reset_token: str
+    new_password: str
+    confirm_password: Optional[str] = None
+
+
+class ResendOtpRequest(BaseModel):
+    email: EmailStr
+    purpose: str = "register"  # 'register' | 'forgot_password'
+
+
+class OtpResponse(BaseModel):
+    message: str
+    email: Optional[str] = None
+    cooldown_seconds: Optional[int] = 60
+    reset_token: Optional[str] = None
+
+

@@ -1,4 +1,5 @@
 export * from './client';
+export * from './auth';
 export * from './students';
 export * from './skills';
 export * from './evidence';
@@ -7,4 +8,5 @@ export * from './recommendations';
 export * from './teams';
 export * from './activities';
 export * from './admin';
+
 

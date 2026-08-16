@@ -5,6 +5,7 @@ import base64
 import hashlib
 import secrets
 import hmac
+import re
 from typing import Optional
 from fastapi import Header, HTTPException, status, Depends
 from sqlalchemy.orm import Session, joinedload
@@ -15,8 +16,32 @@ JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "skillbridge-production-secret
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 30  # 30 days token validity
 
+PASSWORD_VALIDATION_ERROR_MSG = (
+    "Password must have a minimum length of 6 characters and include at least 1 letter, 1 number, and 1 special character."
+)
+
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    r"""
+    Validate password requirements:
+    - Minimum length: 6 characters
+    - At least 1 letter ([a-zA-Z])
+    - At least 1 number ([0-9])
+    - At least 1 special character ([^a-zA-Z0-9\s])
+    """
+    if not password or len(password) < 6:
+        return False, PASSWORD_VALIDATION_ERROR_MSG
+    has_letter = bool(re.search(r"[a-zA-Z]", password))
+    has_number = bool(re.search(r"[0-9]", password))
+    has_special = bool(re.search(r"[^a-zA-Z0-9\s]", password))
+    if not (has_letter and has_number and has_special):
+        return False, PASSWORD_VALIDATION_ERROR_MSG
+    return True, ""
+
+
 
 def hash_password(password: str) -> str:
+
     """
     Securely hash a plain text password using PBKDF2-HMAC-SHA256
     with a cryptographically random 16-byte salt and 100,000 iterations.

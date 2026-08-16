@@ -6,6 +6,8 @@ from app.models.skill import Skill, StudentSkill
 from app.models.evidence import Evidence
 from app.models.internship import Internship, InternshipSkill
 from app.models.match import Match
+from app.models.otp import OTP
+
 
 
 from sqlalchemy import inspect, text

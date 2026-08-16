@@ -154,6 +154,14 @@ export interface ApiStudentLoginResponse {
   last_screen: string;
 }
 
+export interface ApiOtpResponse {
+  message: string;
+  email?: string;
+  cooldown_seconds?: number;
+  reset_token?: string;
+}
+
+
 export interface ApiTeamMember {
   id: number;
   team_id: number;
