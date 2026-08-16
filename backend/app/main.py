@@ -38,16 +38,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration allowing localhost/127.0.0.1 on any port and explicit origins
+# CORS configuration allowing localhost, vercel.app, and netlify.app origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app)(:\d+)?$",
+    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app|.*\.netlify\.app)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
 
 # Include API Routers under /api
 app.include_router(health_router, prefix=settings.API_V1_STR)
