@@ -165,53 +165,11 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
             last_screen=last_screen,
         )
 
-    # 6. Handle AUTO mode (fallback)
-    if existing:
-        if existing.password_hash and not verify_password(password_clean, existing.password_hash):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid password.",
-            )
-        token = create_access_token(existing.id)
-        last_screen = existing.last_screen or "dashboard"
-        return StudentLoginResponse(
-            student=existing,
-            token=token,
-            message=f"Welcome back, {existing.name}!",
-            last_screen=last_screen,
-        )
-
-
-    # Auto-register if not existing in auto mode
-    is_valid_pwd, pwd_error = validate_password_strength(password_clean)
-    if not is_valid_pwd:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=pwd_error,
-        )
-
-    new_student = Student(
-        name=display_name,
-        email=normalized_email,
-        university="SkillBridge Academic Network",
-        graduation_year=2027,
-        password_hash=hash_password(password_clean),
-        last_screen="dashboard",
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid authentication mode. Use 'login' or 'register'.",
     )
-    db.add(new_student)
-    db.commit()
-    db.refresh(new_student)
 
-    new_student.skills = []
-    new_student.evidence = []
-
-    token = create_access_token(new_student.id)
-    return StudentLoginResponse(
-        student=new_student,
-        token=token,
-        message=f"Account created successfully. Welcome to SkillBridge, {new_student.name}!",
-        last_screen="dashboard",
-    )
 
 
 

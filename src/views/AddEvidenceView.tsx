@@ -9,10 +9,11 @@ interface AddEvidenceViewProps {
 }
 
 export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
-  studentId = 1,
+  studentId,
   onAddEvidence,
   onNavigate,
 }) => {
+
   const [type, setType] = useState<EvidenceItem['type']>('Project');
   const [title, setTitle] = useState('');
   const [institution, setInstitution] = useState('');

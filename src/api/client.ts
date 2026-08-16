@@ -90,13 +90,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         response.statusText ||
         `HTTP Error ${response.status}`;
 
-      // Specific diagnostic if a static host returns HTML 404 instead of JSON API response
+      // Specific diagnostic if a host returns HTML 404 instead of JSON API response
       if (response.status === 404 && !isJson && typeof responseData === 'string' && responseData.includes('<!doctype')) {
-        errorMessage = `API endpoint not found (HTTP 404 on ${url}). If deploying frontend on Netlify, configure VITE_API_URL in Netlify site settings pointing to your live backend.`;
+        errorMessage = `API endpoint not found (HTTP 404 on ${url}). Please ensure backend is running.`;
       }
 
       throw new ApiError(response.status, typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage), responseData);
     }
+
 
 
     return responseData as T;

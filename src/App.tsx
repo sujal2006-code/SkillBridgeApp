@@ -106,8 +106,14 @@ export default function App() {
   // Convert backend student skills & evidence into frontend view models
   const processStudentData = (studentData: ApiStudent) => {
     setStudent(studentData);
+    setActiveStudentId(studentData.id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('skillbridge_student_name', studentData.name);
+      localStorage.setItem('skillbridge_student_id', String(studentData.id));
+    }
 
     // Convert skills
+
     if (studentData.skills) {
       const verifiedStudentSkills = studentData.skills.filter(s => s.verification_status === 'verified');
       const mappedSkills: Skill[] = verifiedStudentSkills.map((ss) => {
@@ -453,12 +459,12 @@ export default function App() {
       verificationStatus: 'pending',
     };
 
-    setEvidenceList([newEvidence, ...evidenceList]);
-    if (activeStudentId) {
-      await loadBackendData(activeStudentId);
-    }
+    setEvidenceList((prev) => [newEvidence, ...prev]);
+    await loadBackendData();
     showToast(`Evidence "${newEvidenceData.title}" submitted. Status: PENDING VERIFICATION.`);
   };
+
+
 
   // Handler: Apply for Internship
   const handleApplyInternship = async (internshipId: string) => {
@@ -674,11 +680,12 @@ export default function App() {
 
         {currentScreen === 'add-evidence' && (
           <AddEvidenceView
-            studentId={activeStudentId || 1}
+            studentId={student?.id || activeStudentId || undefined}
             onAddEvidence={handleAddEvidence}
             onNavigate={handleNavigate}
           />
         )}
+
 
         {currentScreen === 'admin-login' && (
           <AdminLoginView
