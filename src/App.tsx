@@ -609,7 +609,7 @@ export default function App() {
         currentScreen={currentScreen}
         onNavigate={handleNavigate}
         pendingCount={pendingQueueCount}
-        studentName={student?.name || localStorage.getItem('skillbridge_student_name') || 'Student'}
+        studentName={student?.name || 'Student'}
         onSwitchStudent={handleLogout}
         onLogout={handleLogout}
         isAdminAuthenticated={!!adminToken}
@@ -627,7 +627,7 @@ export default function App() {
             evidenceList={evidenceList}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
+            onRetry={() => loadBackendData()}
             onNavigate={handleNavigate}
             onOpenEvidence={setSelectedEvidence}
           />
@@ -635,7 +635,7 @@ export default function App() {
 
         {currentScreen === 'dashboard' && (
           <StudentDashboardView
-            studentName={student?.name || localStorage.getItem('skillbridge_student_name') || 'Student'}
+            studentName={student?.name || 'Student'}
             internships={internships}
             activities={activities}
             verifiedSkillsCount={verifiedSkillsCount}
@@ -645,7 +645,7 @@ export default function App() {
             completionPercentage={completionPercentage}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
+            onRetry={() => loadBackendData()}
             onNavigate={handleNavigate}
             onSelectInternship={(internship) => {
               setSelectedMatchItem(internship);
@@ -658,7 +658,7 @@ export default function App() {
             internships={internships}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
+            onRetry={() => loadBackendData()}
             onApply={handleApplyInternship}
             onOpenMatchModal={setSelectedMatchItem}
             onNavigate={handleNavigate}
@@ -667,16 +667,17 @@ export default function App() {
 
         {currentScreen === 'team-builder' && (
           <TeamBuilderView
-            studentName={student?.name || localStorage.getItem('skillbridge_student_name') || 'Student'}
+            studentName={student?.name || 'Student'}
             candidates={candidates}
             isLoading={isLoading}
             error={apiError}
-            onRetry={() => activeStudentId && loadBackendData(activeStudentId)}
+            onRetry={() => loadBackendData()}
             onInviteCandidate={handleInviteCandidate}
             onOpenMatchModal={setSelectedMatchItem}
             onNavigate={handleNavigate}
           />
         )}
+
 
         {currentScreen === 'add-evidence' && (
           <AddEvidenceView

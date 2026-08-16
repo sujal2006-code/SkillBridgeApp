@@ -24,7 +24,7 @@ class EvidenceBase(BaseModel):
 
 
 class EvidenceCreate(EvidenceBase):
-    student_id: int
+    student_id: Optional[int] = None
 
 
 class EvidenceRead(EvidenceBase):

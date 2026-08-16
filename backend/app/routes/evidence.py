@@ -19,25 +19,23 @@ class EvidenceStatusUpdate(BaseModel):
 @router.post("/evidence", response_model=EvidenceRead, status_code=status.HTTP_201_CREATED)
 def create_evidence(
     evidence_in: EvidenceCreate,
-    auth_student_id: Optional[int] = Depends(get_optional_student_id),
+    auth_student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ) -> Evidence:
     """Submit new evidence item (coursework, project, competition, certificate, internship)."""
-    # Enforce verified token identity if authenticated
-    effective_student_id = auth_student_id if auth_student_id is not None else evidence_in.student_id
-
-    student = db.query(Student).filter(Student.id == effective_student_id).first()
+    student = db.query(Student).filter(Student.id == auth_student_id).first()
     if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student not found.",
+            detail="Authenticated student not found.",
         )
 
     evidence_data = evidence_in.model_dump()
-    evidence_data["student_id"] = effective_student_id
+    evidence_data["student_id"] = auth_student_id
     evidence = Evidence(**evidence_data)
     db.add(evidence)
     db.flush()
+
 
     # Log persistent activity
     type_cap = evidence.evidence_type.capitalize()
