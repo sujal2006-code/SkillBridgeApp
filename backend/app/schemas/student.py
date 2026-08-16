@@ -35,10 +35,12 @@ class StudentDetailRead(StudentRead):
 class StudentLoginRequest(BaseModel):
     name: str
     password: str
+    confirm_password: Optional[str] = None
     mode: Optional[str] = "auto"  # 'login' | 'register' | 'auto'
 
 
 class StudentUpdateStateRequest(BaseModel):
+
     last_screen: Optional[str] = None
     last_state_json: Optional[str] = None
 

@@ -6,21 +6,20 @@ import urllib.request
 import urllib.error
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 
 class EmailService:
     @staticmethod
-    def _get_config() -> Dict[str, Any]:
-        """Extract email provider configuration from environment variables."""
+    def get_provider_status() -> Dict[str, Any]:
+        """Inspect environment and return detected email providers (without exposing secrets)."""
         resend_key = os.environ.get("RESEND_API_KEY") or os.environ.get("EMAIL_API_KEY")
         sendgrid_key = os.environ.get("SENDGRID_API_KEY")
+        brevo_key = os.environ.get("BREVO_API_KEY")
         
         smtp_host = os.environ.get("SMTP_HOST") or os.environ.get("MAIL_SERVER")
-        smtp_port = int(os.environ.get("SMTP_PORT") or os.environ.get("MAIL_PORT") or 587)
         smtp_user = os.environ.get("SMTP_USER") or os.environ.get("MAIL_USERNAME") or os.environ.get("GMAIL_USER")
         smtp_password = os.environ.get("SMTP_PASSWORD") or os.environ.get("MAIL_PASSWORD") or os.environ.get("GMAIL_APP_PASSWORD")
-        smtp_tls = os.environ.get("SMTP_TLS", "true").lower() in ("true", "1", "yes")
         
         email_from = (
             os.environ.get("EMAIL_FROM")
@@ -28,24 +27,33 @@ class EmailService:
             or (f"SkillBridge <{smtp_user}>" if smtp_user else "SkillBridge Verification <onboarding@resend.dev>")
         )
 
+        providers = []
+        if resend_key:
+            providers.append("Resend API")
+        if brevo_key:
+            providers.append("Brevo API")
+        if sendgrid_key:
+            providers.append("SendGrid API")
+        if smtp_host and smtp_user and smtp_password:
+            providers.append(f"SMTP ({smtp_host})")
+
         return {
-            "resend_key": resend_key,
-            "sendgrid_key": sendgrid_key,
-            "smtp_host": smtp_host,
-            "smtp_port": smtp_port,
-            "smtp_user": smtp_user,
-            "smtp_password": smtp_password,
-            "smtp_tls": smtp_tls,
-            "email_from": email_from,
+            "has_live_provider": len(providers) > 0,
+            "configured_providers": providers,
+            "sender_email": email_from,
+            "smtp_configured": bool(smtp_host and smtp_user and smtp_password),
+            "resend_configured": bool(resend_key),
+            "brevo_configured": bool(brevo_key),
+            "sendgrid_configured": bool(sendgrid_key),
         }
 
     @classmethod
-    def send_otp_email(cls, to_email: str, otp_code: str, purpose: str = "register") -> bool:
+    def send_otp_email(cls, to_email: str, otp_code: str, purpose: str = "register") -> Tuple[bool, str]:
         """
         Send a real 6-digit OTP verification email to the user's Gmail/email address.
-        Supports Resend, SendGrid, and SMTP (Gmail/Outlook/Brevo/SES).
+        Returns: (success: bool, detail_message: str)
         """
-        config = cls._get_config()
+        status = cls.get_provider_status()
         
         action_title = "Account Verification" if purpose == "register" else "Password Reset"
         action_desc = (
@@ -56,7 +64,7 @@ class EmailService:
 
         subject = f"SkillBridge — {otp_code} is your {action_title} Code"
 
-        # High quality branded HTML email template
+        # High-contrast branded HTML email template
         html_body = f"""
         <!DOCTYPE html>
         <html>
@@ -106,72 +114,116 @@ class EmailService:
 
         plain_text = f"SkillBridge {action_title}\n\n{action_desc}\n\nYour 6-Digit Verification Code is: {otp_code}\n\nThis code expires in 10 minutes.\nIf you did not request this, please ignore this email."
 
+        errors = []
+
         # 1. Try Resend API (HTTP REST)
-        if config["resend_key"]:
+        resend_key = os.environ.get("RESEND_API_KEY") or os.environ.get("EMAIL_API_KEY")
+        if resend_key:
             try:
+                from_email = os.environ.get("EMAIL_FROM") or "SkillBridge Verification <onboarding@resend.dev>"
                 cls._send_via_resend(
-                    api_key=config["resend_key"],
-                    from_email=config["email_from"],
+                    api_key=resend_key,
+                    from_email=from_email,
                     to_email=to_email,
                     subject=subject,
                     html=html_body,
                     text=plain_text,
                 )
-                print(f"[EMAIL SERVICE] Successfully delivered OTP via Resend to {to_email}")
-                return True
+                print(f"[EMAIL SERVICE SUCCESS] Delivered OTP via Resend to {to_email}")
+                return True, "Delivered via Resend"
             except Exception as e:
-                print(f"[EMAIL SERVICE WARNING] Resend delivery failed: {e}. Falling back to next method...")
+                err_str = f"Resend error: {str(e)}"
+                print(f"[EMAIL SERVICE WARNING] {err_str}")
+                errors.append(err_str)
 
-        # 2. Try SendGrid API (HTTP REST)
-        if config["sendgrid_key"]:
+        # 2. Try Brevo (Sendinblue) API (HTTP REST)
+        brevo_key = os.environ.get("BREVO_API_KEY")
+        if brevo_key:
             try:
+                from_email = os.environ.get("EMAIL_FROM") or os.environ.get("SMTP_USER") or "noreply@skillbridge.edu"
+                cls._send_via_brevo(
+                    api_key=brevo_key,
+                    from_email=from_email,
+                    to_email=to_email,
+                    subject=subject,
+                    html=html_body,
+                    text=plain_text,
+                )
+                print(f"[EMAIL SERVICE SUCCESS] Delivered OTP via Brevo to {to_email}")
+                return True, "Delivered via Brevo"
+            except Exception as e:
+                err_str = f"Brevo error: {str(e)}"
+                print(f"[EMAIL SERVICE WARNING] {err_str}")
+                errors.append(err_str)
+
+        # 3. Try SendGrid API (HTTP REST)
+        sendgrid_key = os.environ.get("SENDGRID_API_KEY")
+        if sendgrid_key:
+            try:
+                from_email = os.environ.get("EMAIL_FROM") or "noreply@skillbridge.edu"
                 cls._send_via_sendgrid(
-                    api_key=config["sendgrid_key"],
-                    from_email=config["email_from"],
+                    api_key=sendgrid_key,
+                    from_email=from_email,
                     to_email=to_email,
                     subject=subject,
                     html=html_body,
                     text=plain_text,
                 )
-                print(f"[EMAIL SERVICE] Successfully delivered OTP via SendGrid to {to_email}")
-                return True
+                print(f"[EMAIL SERVICE SUCCESS] Delivered OTP via SendGrid to {to_email}")
+                return True, "Delivered via SendGrid"
             except Exception as e:
-                print(f"[EMAIL SERVICE WARNING] SendGrid delivery failed: {e}. Falling back to next method...")
+                err_str = f"SendGrid error: {str(e)}"
+                print(f"[EMAIL SERVICE WARNING] {err_str}")
+                errors.append(err_str)
 
-        # 3. Try SMTP (e.g. Gmail App Password, AWS SES, Brevo, custom SMTP)
-        if config["smtp_host"] and config["smtp_user"] and config["smtp_password"]:
+        # 4. Try SMTP (e.g. Gmail App Password, Brevo SMTP, AWS SES)
+        smtp_host = os.environ.get("SMTP_HOST") or os.environ.get("MAIL_SERVER")
+        smtp_port = int(os.environ.get("SMTP_PORT") or os.environ.get("MAIL_PORT") or 587)
+        smtp_user = os.environ.get("SMTP_USER") or os.environ.get("MAIL_USERNAME") or os.environ.get("GMAIL_USER")
+        smtp_password = os.environ.get("SMTP_PASSWORD") or os.environ.get("MAIL_PASSWORD") or os.environ.get("GMAIL_APP_PASSWORD")
+        smtp_tls = os.environ.get("SMTP_TLS", "true").lower() in ("true", "1", "yes")
+
+        if smtp_host and smtp_user and smtp_password:
             try:
+                from_email = os.environ.get("EMAIL_FROM") or f"SkillBridge <{smtp_user}>"
                 cls._send_via_smtp(
-                    host=config["smtp_host"],
-                    port=config["smtp_port"],
-                    user=config["smtp_user"],
-                    password=config["smtp_password"],
-                    use_tls=config["smtp_tls"],
-                    from_email=config["email_from"],
+                    host=smtp_host,
+                    port=smtp_port,
+                    user=smtp_user,
+                    password=smtp_password,
+                    use_tls=smtp_tls,
+                    from_email=from_email,
                     to_email=to_email,
                     subject=subject,
                     html=html_body,
                     text=plain_text,
                 )
-                print(f"[EMAIL SERVICE] Successfully delivered OTP via SMTP to {to_email}")
-                return True
+                print(f"[EMAIL SERVICE SUCCESS] Delivered OTP via SMTP ({smtp_host}) to {to_email}")
+                return True, f"Delivered via SMTP ({smtp_host})"
             except Exception as e:
-                print(f"[EMAIL SERVICE WARNING] SMTP delivery failed: {e}")
+                err_str = f"SMTP ({smtp_host}) error: {str(e)}"
+                print(f"[EMAIL SERVICE WARNING] {err_str}")
+                errors.append(err_str)
 
-        # 4. Fallback for testing / dev when credentials are not yet configured in environment
-        print(f"\n==================================================================")
-        print(f"[EMAIL SERVICE NOTICE] Real OTP Delivery target: {to_email}")
-        print(f"Subject: {subject}")
-        print(f"OTP Code: {otp_code} (Valid for 10 minutes)")
-        print(f"Configure RESEND_API_KEY or SMTP_USER/SMTP_PASSWORD in Vercel for live mail delivery.")
-        print(f"==================================================================\n")
-        return True
+        # 5. If no providers were configured OR all configured providers failed
+        if not status["has_live_provider"]:
+            msg = (
+                f"No email provider configured in Vercel environment variables. "
+                f"Please add RESEND_API_KEY or SMTP_USER/SMTP_PASSWORD in Vercel Project Settings."
+            )
+            print(f"\n[EMAIL SERVICE NOTICE] {msg} Target: {to_email}, Code: {otp_code}\n")
+            return False, msg
+        else:
+            combined_errors = "; ".join(errors)
+            msg = f"Failed to deliver email through configured providers: {combined_errors}"
+            print(f"\n[EMAIL SERVICE ERROR] {msg}\n")
+            return False, msg
 
     @staticmethod
     def _send_via_resend(api_key: str, from_email: str, to_email: str, subject: str, html: str, text: str):
         url = "https://api.resend.com/emails"
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {api_key.strip()}",
             "Content-Type": "application/json",
             "User-Agent": "SkillBridge-Backend/1.0",
         }
@@ -183,15 +235,51 @@ class EmailService:
             "text": text,
         }
         req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status >= 400:
-                raise RuntimeError(f"Resend API error status {response.status}")
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status >= 400:
+                    resp_body = response.read().decode("utf-8", errors="ignore")
+                    raise RuntimeError(f"Resend HTTP {response.status}: {resp_body}")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"Resend HTTP {e.code}: {err_body}")
+
+    @staticmethod
+    def _send_via_brevo(api_key: str, from_email: str, to_email: str, subject: str, html: str, text: str):
+        url = "https://api.brevo.com/v3/smtp/email"
+        sender_name = "SkillBridge"
+        sender_email = from_email
+        if "<" in from_email and ">" in from_email:
+            sender_name = from_email.split("<")[0].strip()
+            sender_email = from_email.split("<")[1].replace(">", "").strip()
+
+        headers = {
+            "api-key": api_key.strip(),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        data = {
+            "sender": {"name": sender_name, "email": sender_email},
+            "to": [{"email": to_email}],
+            "subject": subject,
+            "htmlContent": html,
+            "textContent": text,
+        }
+        req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status >= 400:
+                    resp_body = response.read().decode("utf-8", errors="ignore")
+                    raise RuntimeError(f"Brevo HTTP {response.status}: {resp_body}")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"Brevo HTTP {e.code}: {err_body}")
 
     @staticmethod
     def _send_via_sendgrid(api_key: str, from_email: str, to_email: str, subject: str, html: str, text: str):
         url = "https://api.sendgrid.com/v3/mail/send"
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {api_key.strip()}",
             "Content-Type": "application/json",
         }
         data = {
@@ -204,9 +292,14 @@ class EmailService:
             ],
         }
         req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status >= 400:
-                raise RuntimeError(f"SendGrid API error status {response.status}")
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status >= 400:
+                    resp_body = response.read().decode("utf-8", errors="ignore")
+                    raise RuntimeError(f"SendGrid HTTP {response.status}: {resp_body}")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"SendGrid HTTP {e.code}: {err_body}")
 
     @staticmethod
     def _send_via_smtp(host: str, port: int, user: str, password: str, use_tls: bool, from_email: str, to_email: str, subject: str, html: str, text: str):
@@ -218,14 +311,18 @@ class EmailService:
         msg.attach(MIMEText(text, "plain", "utf-8"))
         msg.attach(MIMEText(html, "html", "utf-8"))
 
+        clean_user = user.strip()
+        clean_pass = password.strip().replace(" ", "")  # Gmail app passwords often copy with spaces
+
         if port == 465:
             context = ssl.create_default_context()
-            with smtplib.SMTP_SSL(host, port, context=context, timeout=10) as server:
-                server.login(user, password)
+            with smtplib.SMTP_SSL(host, port, context=context, timeout=12) as server:
+                server.login(clean_user, clean_pass)
                 server.sendmail(from_email, [to_email], msg.as_string())
         else:
-            with smtplib.SMTP(host, port, timeout=10) as server:
+            with smtplib.SMTP(host, port, timeout=12) as server:
                 if use_tls:
-                    server.starttls()
-                server.login(user, password)
+                    context = ssl.create_default_context()
+                    server.starttls(context=context)
+                server.login(clean_user, clean_pass)
                 server.sendmail(from_email, [to_email], msg.as_string())

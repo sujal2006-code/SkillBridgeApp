@@ -83,19 +83,19 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
 
     # 4. Handle CREATE ACCOUNT / REGISTER mode
     if payload.mode == "register":
-        # Check password strength first
-        is_valid_pwd, pwd_error = validate_password_strength(password_clean)
-        if not is_valid_pwd:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=pwd_error,
-            )
+        # Validate password confirmation if provided
+        if payload.confirm_password is not None:
+            if password_clean != payload.confirm_password.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Passwords do not match.",
+                )
 
-        # Check duplicate account
+        # Check duplicate account by name
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account already exists. Please log in instead.",
+                detail="Account already exists. Please log in.",
             )
 
         # Create new student profile in persistent PostgreSQL
@@ -131,15 +131,15 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
         if not existing:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No account found for '{name_clean}'. Please select 'Create Account' to register.",
+                detail="Incorrect name.",
             )
 
-        # Verify password if already set
+        # Verify password if set
         if existing.password_hash:
             if not verify_password(password_clean, existing.password_hash):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"Incorrect password for account '{existing.name}'. Please try again.",
+                    detail="Invalid password.",
                 )
         else:
             # First-time password assignment for demo or seed student record
@@ -161,7 +161,7 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
         if existing.password_hash and not verify_password(password_clean, existing.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Incorrect password for account '{existing.name}'. Please try again.",
+                detail="Invalid password.",
             )
         token = create_access_token(existing.id)
         last_screen = existing.last_screen or "dashboard"
@@ -171,6 +171,7 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
             message=f"Welcome back, {existing.name}!",
             last_screen=last_screen,
         )
+
 
     # Auto-register if not existing in auto mode
     is_valid_pwd, pwd_error = validate_password_strength(password_clean)

@@ -54,6 +54,23 @@ def _is_expired(dt: Optional[datetime]) -> bool:
     return dt < now_utc
 
 
+@router.get("/email-status", summary="Check Configured Email Providers")
+def check_email_status() -> dict:
+    """Diagnostic endpoint reporting active email providers in production without exposing secrets."""
+    status = EmailService.get_provider_status()
+    return {
+        "status": "ok",
+        "live_email_configured": status["has_live_provider"],
+        "providers_detected": status["configured_providers"],
+        "sender": status["sender_email"],
+        "setup_guide": {
+            "option_1_resend": "Set RESEND_API_KEY and EMAIL_FROM in Vercel Environment Variables.",
+            "option_2_gmail_smtp": "Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=<email>, SMTP_PASSWORD=<16-digit-app-password>, EMAIL_FROM=SkillBridge <<email>> in Vercel.",
+            "option_3_brevo": "Set BREVO_API_KEY and EMAIL_FROM in Vercel Environment Variables.",
+        }
+    }
+
+
 @router.post("/register-otp", response_model=OtpResponse, summary="Send Email OTP for New Account Registration")
 def send_register_otp(payload: RegisterOtpRequest, db: Session = Depends(get_db)) -> OtpResponse:
     """Validate registration details and send a secure 6-digit OTP to the user's Gmail/email address."""
@@ -129,13 +146,14 @@ def send_register_otp(payload: RegisterOtpRequest, db: Session = Depends(get_db)
     db.commit()
 
     # 6. Deliver real OTP to Gmail/Email
-    EmailService.send_otp_email(email_clean, otp_code, "register")
+    is_sent, delivery_info = EmailService.send_otp_email(email_clean, otp_code, "register")
 
     return OtpResponse(
-        message="Verification code sent to your email. Please check your inbox.",
+        message="Verification code sent to your email. Please check your inbox and spam folder.",
         email=email_clean,
         cooldown_seconds=RESEND_COOLDOWN_SECONDS,
     )
+
 
 
 @router.post("/verify-register-otp", response_model=StudentLoginResponse, summary="Verify OTP and Create Account")
@@ -275,13 +293,14 @@ def send_forgot_password_otp(payload: ForgotPasswordOtpRequest, db: Session = De
     db.commit()
 
     # Deliver real OTP
-    EmailService.send_otp_email(student.email, otp_code, "forgot_password")
+    is_sent, delivery_info = EmailService.send_otp_email(student.email, otp_code, "forgot_password")
 
     return OtpResponse(
-        message="Password reset code sent to your email.",
+        message="Password reset code sent to your email. Please check your inbox and spam folder.",
         email=student.email,
         cooldown_seconds=RESEND_COOLDOWN_SECONDS,
     )
+
 
 
 @router.post("/verify-reset-otp", response_model=OtpResponse, summary="Verify Password Reset OTP")
@@ -471,10 +490,12 @@ def resend_otp(payload: ResendOtpRequest, db: Session = Depends(get_db)) -> OtpR
     db.add(new_otp)
     db.commit()
 
-    EmailService.send_otp_email(email_clean, otp_code, purpose)
+    # Deliver real OTP
+    is_sent, delivery_info = EmailService.send_otp_email(email_clean, otp_code, purpose)
 
     return OtpResponse(
-        message="A new verification code has been sent to your email.",
+        message="A new verification code has been sent to your email. Please check your inbox and spam folder.",
         email=email_clean,
         cooldown_seconds=RESEND_COOLDOWN_SECONDS,
     )
+

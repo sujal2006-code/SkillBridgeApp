@@ -47,9 +47,10 @@ export const studentsApi = {
   /**
    * Secure login or account registration with password
    */
-  loginStudent: (name: string, password: string, mode: 'login' | 'register' | 'auto' = 'auto') => {
-    return apiClient.post<ApiStudentLoginResponse>('/api/students/login', { name, password, mode });
+  loginStudent: (name: string, password: string, mode: 'login' | 'register' | 'auto' = 'auto', confirm_password?: string) => {
+    return apiClient.post<ApiStudentLoginResponse>('/api/students/login', { name, password, mode, confirm_password });
   },
+
 
   /**
    * Persist current student navigation and workflow state to resume seamlessly
