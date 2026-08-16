@@ -17,26 +17,25 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 30  # 30 days token validity
 
 PASSWORD_VALIDATION_ERROR_MSG = (
-    "Password must have a minimum length of 6 characters and include at least 1 letter, 1 number, and 1 special character."
+    "Password must have a minimum length of 5 characters and include at least 1 letter and 1 number."
 )
 
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
     r"""
     Validate password requirements:
-    - Minimum length: 6 characters
+    - Minimum length: 5 characters
     - At least 1 letter ([a-zA-Z])
     - At least 1 number ([0-9])
-    - At least 1 special character ([^a-zA-Z0-9\s])
     """
-    if not password or len(password) < 6:
+    if not password or len(password) < 5:
         return False, PASSWORD_VALIDATION_ERROR_MSG
     has_letter = bool(re.search(r"[a-zA-Z]", password))
     has_number = bool(re.search(r"[0-9]", password))
-    has_special = bool(re.search(r"[^a-zA-Z0-9\s]", password))
-    if not (has_letter and has_number and has_special):
+    if not (has_letter and has_number):
         return False, PASSWORD_VALIDATION_ERROR_MSG
     return True, ""
+
 
 
 

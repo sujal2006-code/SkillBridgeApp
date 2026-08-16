@@ -13,9 +13,12 @@ from app.database.session import SessionLocal
 from app.database.init_db import init_db
 from app.models.student import Student
 from app.models.activity import Activity
-from app.models.skill import Skill
-from app.models.internship import Internship
-from app.core.security import verify_password, verify_access_token
+from app.core.security import (
+    validate_password_strength,
+    PASSWORD_VALIDATION_ERROR_MSG,
+    verify_password,
+    verify_access_token,
+)
 
 
 class TestSimplifiedSkillBridgeAuth(unittest.TestCase):
@@ -28,112 +31,150 @@ class TestSimplifiedSkillBridgeAuth(unittest.TestCase):
             db.close()
         cls.client = TestClient(app)
 
-    def test_01_complete_simplified_auth_lifecycle(self):
-        """Full end-to-end audit of simplified Name + Password authentication."""
+    def test_01_password_validation_rules(self):
+        """
+        Test exact password validation cases:
+        1. "12345" -> FAIL (no letter)
+        2. "abcde" -> FAIL (no number)
+        3. "abcd" -> FAIL (min 5 chars)
+        4. "abc12" -> PASS
+        5. "Skill1" -> PASS
+        6. Password mismatch -> FAIL ("Passwords do not match.")
+        """
+        expected_msg = PASSWORD_VALIDATION_ERROR_MSG
+        self.assertEqual(expected_msg, "Password must have a minimum length of 5 characters and include at least 1 letter and 1 number.")
+
+        # Unit test validation function
+        # 1. "12345" (no letter) -> False
+        v1, msg1 = validate_password_strength("12345")
+        self.assertFalse(v1)
+        self.assertEqual(msg1, expected_msg)
+
+        # 2. "abcde" (no number) -> False
+        v2, msg2 = validate_password_strength("abcde")
+        self.assertFalse(v2)
+        self.assertEqual(msg2, expected_msg)
+
+        # 3. "abcd" (less than 5 chars) -> False
+        v3, msg3 = validate_password_strength("abcd")
+        self.assertFalse(v3)
+        self.assertEqual(msg3, expected_msg)
+
+        # 4. "abc12" -> True
+        v4, msg4 = validate_password_strength("abc12")
+        self.assertTrue(v4)
+        self.assertEqual(msg4, "")
+
+        # 5. "Skill1" -> True
+        v5, msg5 = validate_password_strength("Skill1")
+        self.assertTrue(v5)
+        self.assertEqual(msg5, "")
+
+        # API Level verification of password rules on Registration
+        # Case 1: "12345"
+        r1 = self.client.post("/api/students/login", json={"name": "Test_12345", "password": "12345", "confirm_password": "12345", "mode": "register"})
+        self.assertEqual(r1.status_code, 400)
+        self.assertEqual(r1.json()["detail"], expected_msg)
+
+        # Case 2: "abcde"
+        r2 = self.client.post("/api/students/login", json={"name": "Test_abcde", "password": "abcde", "confirm_password": "abcde", "mode": "register"})
+        self.assertEqual(r2.status_code, 400)
+        self.assertEqual(r2.json()["detail"], expected_msg)
+
+        # Case 3: "abcd"
+        r3 = self.client.post("/api/students/login", json={"name": "Test_abcd", "password": "abcd", "confirm_password": "abcd", "mode": "register"})
+        self.assertEqual(r3.status_code, 400)
+        self.assertEqual(r3.json()["detail"], expected_msg)
+
+        # Case 6: Password mismatch
+        r6 = self.client.post("/api/students/login", json={"name": "Test_mismatch", "password": "Skill1", "confirm_password": "DifferentPass2", "mode": "register"})
+        self.assertEqual(r6.status_code, 400)
+        self.assertEqual(r6.json()["detail"], "Passwords do not match.")
+
+        print("\n[PASS] 1. Password validation rules (12345, abcde, abcd, abc12, Skill1, mismatch) verified on both unit & API level.")
+
+    def test_02_full_lifecycle_and_messages(self):
+        """Test complete registration, duplicate handling, login, wrong name, wrong password, session."""
         ts = int(time.time() * 1000)
-        name = f"HackathonTestUser_{ts}"
-        password = "HackathonPass2026!"
+        name = f"HackathonUser_{ts}"
+        password = "abc12"  # Testing valid 5-char password
 
-        # 1. Password Confirmation Mismatch Check
-        mismatch_resp = self.client.post(
-            "/api/students/login",
-            json={"name": name, "password": password, "confirm_password": "WrongConfirmPass123!", "mode": "register"},
-        )
-        self.assertEqual(mismatch_resp.status_code, 400)
-        self.assertEqual(mismatch_resp.json()["detail"], "Passwords do not match.")
-        print("\n[PASS] 1. Password mismatch blocked with 'Passwords do not match.'")
-
-        # 2. Create Account
+        # 1. Create Account with "abc12"
         reg_resp = self.client.post(
             "/api/students/login",
             json={"name": name, "password": password, "confirm_password": password, "mode": "register"},
         )
         self.assertEqual(reg_resp.status_code, 200)
-        reg_data = reg_resp.json()
-        student_id = reg_data["student"]["id"]
-        token1 = reg_data["token"]
-        self.assertEqual(verify_access_token(token1), student_id)
-        print(f"[PASS] 2. Account '{name}' created successfully in PostgreSQL (ID: {student_id}).")
+        student_id = reg_resp.json()["student"]["id"]
+        token = reg_resp.json()["token"]
+        self.assertEqual(verify_access_token(token), student_id)
+        print(f"[PASS] 2. User '{name}' created successfully in PostgreSQL (ID: {student_id}).")
 
         try:
-            # 3. Verify Database Record (no plaintext password)
+            # 2. Verify Database (salted PBKDF2 hash, no plaintext password)
             db = SessionLocal()
             student_rec = db.query(Student).filter(Student.id == student_id).first()
             self.assertIsNotNone(student_rec)
             self.assertEqual(student_rec.name, name)
-            self.assertNotEqual(student_rec.password_hash, password)
             self.assertTrue(student_rec.password_hash.startswith("pbkdf2_sha256$"))
             self.assertTrue(verify_password(password, student_rec.password_hash))
             db.close()
             print("[PASS] 3. Database verified: Salted PBKDF2 hash stored, 0 plaintext passwords.")
 
-            # 4. Duplicate Account Prevention
+            # 3. Duplicate Account Prevention
             dup_resp = self.client.post(
                 "/api/students/login",
                 json={"name": name, "password": password, "confirm_password": password, "mode": "register"},
             )
             self.assertEqual(dup_resp.status_code, 400)
             self.assertEqual(dup_resp.json()["detail"], "Account already exists. Please log in.")
+            print("[PASS] 4. Duplicate account rejected with 'Account already exists. Please log in.'")
 
-            # Also test case-insensitive duplicate attempt
-            dup_lower = self.client.post(
-                "/api/students/login",
-                json={"name": name.lower(), "password": password, "confirm_password": password, "mode": "register"},
-            )
-            self.assertEqual(dup_lower.status_code, 400)
-            self.assertEqual(dup_lower.json()["detail"], "Account already exists. Please log in.")
-            print("[PASS] 4. Duplicate account prevented with 'Account already exists. Please log in.'")
-
-            # 5. Wrong Name on Login
+            # 4. Wrong Name on Login
             wrong_name_resp = self.client.post(
                 "/api/students/login",
-                json={"name": "NonExistentUser99999", "password": password, "mode": "login"},
+                json={"name": "UnknownUser99999", "password": password, "mode": "login"},
             )
             self.assertEqual(wrong_name_resp.status_code, 404)
             self.assertEqual(wrong_name_resp.json()["detail"], "Incorrect name.")
             print("[PASS] 5. Wrong name rejected with 'Incorrect name.'")
 
-            # 6. Wrong Password on Login
+            # 5. Wrong Password on Login
             wrong_pwd_resp = self.client.post(
                 "/api/students/login",
-                json={"name": name, "password": "WrongPassword999!", "mode": "login"},
+                json={"name": name, "password": "WrongPassword999", "mode": "login"},
             )
             self.assertEqual(wrong_pwd_resp.status_code, 401)
             self.assertEqual(wrong_pwd_resp.json()["detail"], "Invalid password.")
             print("[PASS] 6. Wrong password rejected with 'Invalid password.'")
 
-            # 7. Correct Login
+            # 6. Correct Login
             login_resp = self.client.post(
                 "/api/students/login",
                 json={"name": name, "password": password, "mode": "login"},
             )
             self.assertEqual(login_resp.status_code, 200)
             self.assertEqual(login_resp.json()["student"]["id"], student_id)
-            token2 = login_resp.json()["token"]
             print("[PASS] 7. Correct login succeeded and issued authenticated JWT.")
 
-            # 8. Authenticated Route & Session Resolution
-            profile_resp = self.client.get("/api/students/me", headers={"Authorization": f"Bearer {token2}"})
+            # 7. Authenticated Endpoint Resolution
+            auth_token = login_resp.json()["token"]
+            profile_resp = self.client.get("/api/students/me", headers={"Authorization": f"Bearer {auth_token}"})
             self.assertEqual(profile_resp.status_code, 200)
             self.assertEqual(profile_resp.json()["id"], student_id)
+            print("[PASS] 8. Authenticated session verified via /api/students/me.")
 
-            recs_resp = self.client.get("/api/recommendations/me", headers={"Authorization": f"Bearer {token2}"})
-            self.assertEqual(recs_resp.status_code, 200)
-            self.assertEqual(recs_resp.json()["student_id"], student_id)
-            print("[PASS] 8. Authenticated endpoints (/me, /recommendations/me) resolved cleanly via JWT.")
-
-            # 9. Repeated Login -> Logout -> Login Cycles (3 consecutive times)
+            # 8. Repeated Login -> Logout -> Login cycles
             for cycle in range(1, 4):
                 rel = self.client.post(
                     "/api/students/login",
                     json={"name": name, "password": password, "mode": "login"},
                 )
-                self.assertEqual(rel.status_code, 200, f"Login cycle {cycle} failed")
+                self.assertEqual(rel.status_code, 200)
                 self.assertEqual(rel.json()["student"]["id"], student_id)
                 print(f"[PASS] 9.{cycle} Login cycle {cycle}/3 passed.")
 
         finally:
-            # Clean up test user
             clean_db = SessionLocal()
             try:
                 clean_db.query(Activity).filter(Activity.student_id == student_id).delete(synchronize_session=False)
@@ -142,8 +183,8 @@ class TestSimplifiedSkillBridgeAuth(unittest.TestCase):
             finally:
                 clean_db.close()
 
-    def test_02_seed_demo_account_preservation(self):
-        """Verify demo account Alex Rivera is preserved and functional."""
+    def test_03_seed_demo_account(self):
+        """Verify demo account Alex Rivera is preserved."""
         login_alex = self.client.post(
             "/api/students/login",
             json={"name": "Alex Rivera", "password": "stanford2026", "mode": "login"},

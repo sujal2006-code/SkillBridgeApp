@@ -83,6 +83,14 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
 
     # 4. Handle CREATE ACCOUNT / REGISTER mode
     if payload.mode == "register":
+        # Validate password requirements
+        is_valid_pwd, pwd_err = validate_password_strength(password_clean)
+        if not is_valid_pwd:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=pwd_err,
+            )
+
         # Validate password confirmation if provided
         if payload.confirm_password is not None:
             if password_clean != payload.confirm_password.strip():
@@ -97,6 +105,7 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Account already exists. Please log in.",
             )
+
 
         # Create new student profile in persistent PostgreSQL
         final_email = normalized_email
