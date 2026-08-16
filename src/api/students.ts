@@ -17,7 +17,14 @@ export const studentsApi = {
   },
 
   /**
-   * Retrieve a student by ID including their skills and evidence items
+   * Retrieve the authenticated student's profile directly using verified JWT token
+   */
+  getMyProfile: () => {
+    return apiClient.get<ApiStudent>('/api/students/me');
+  },
+
+  /**
+   * Retrieve a student by ID including their skills and evidence items (authenticated)
    */
   getStudent: (studentId: number) => {
     return apiClient.get<ApiStudent>(`/api/students/${studentId}`);
@@ -53,5 +60,16 @@ export const studentsApi = {
       last_state_json: lastStateJson,
     });
   },
+
+  /**
+   * Persist authenticated student navigation and workflow state
+   */
+  updateMyState: (lastScreen: string, lastStateJson?: string) => {
+    return apiClient.patch<ApiStudent>('/api/students/me/state', {
+      last_screen: lastScreen,
+      last_state_json: lastStateJson,
+    });
+  },
 };
+
 

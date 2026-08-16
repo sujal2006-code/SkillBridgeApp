@@ -48,11 +48,25 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+  // Automatically attach verified JWT authentication token if present
+  const authToken = typeof window !== 'undefined' ? localStorage.getItem('skillbridge_auth_token') : null;
+  const adminToken = typeof window !== 'undefined' ? localStorage.getItem('skillbridge_admin_token') : null;
+
+  const defaultHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (path.includes('/admin') && adminToken) {
+    defaultHeaders['Authorization'] = `Bearer ${adminToken}`;
+  } else if (authToken) {
+    defaultHeaders['Authorization'] = `Bearer ${authToken}`;
+  }
+
   const config: RequestInit = {
     ...customConfig,
     headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      ...defaultHeaders,
       ...headers,
     },
     signal: controller.signal,

@@ -7,6 +7,7 @@ from app.models.evidence import Evidence
 from app.models.student import Student
 from app.models.activity import Activity
 from app.schemas.evidence import EvidenceCreate, EvidenceRead
+from app.core.security import get_current_student_id, get_optional_student_id
 
 router = APIRouter(tags=["Evidence"])
 
@@ -16,17 +17,25 @@ class EvidenceStatusUpdate(BaseModel):
 
 
 @router.post("/evidence", response_model=EvidenceRead, status_code=status.HTTP_201_CREATED)
-def create_evidence(evidence_in: EvidenceCreate, db: Session = Depends(get_db)) -> Evidence:
+def create_evidence(
+    evidence_in: EvidenceCreate,
+    auth_student_id: Optional[int] = Depends(get_optional_student_id),
+    db: Session = Depends(get_db),
+) -> Evidence:
     """Submit new evidence item (coursework, project, competition, certificate, internship)."""
-    # Verify student exists
-    student = db.query(Student).filter(Student.id == evidence_in.student_id).first()
+    # Enforce verified token identity if authenticated
+    effective_student_id = auth_student_id if auth_student_id is not None else evidence_in.student_id
+
+    student = db.query(Student).filter(Student.id == effective_student_id).first()
     if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Student not found.",
         )
 
-    evidence = Evidence(**evidence_in.model_dump())
+    evidence_data = evidence_in.model_dump()
+    evidence_data["student_id"] = effective_student_id
+    evidence = Evidence(**evidence_data)
     db.add(evidence)
     db.flush()
 
@@ -100,10 +109,20 @@ def update_evidence_status(
 
 
 @router.get("/students/{student_id}/evidence", response_model=List[EvidenceRead])
-def list_student_evidence(student_id: int, db: Session = Depends(get_db)) -> List[Evidence]:
-    """Retrieve all evidence items submitted by a specific student."""
-    # Verify student exists
-    student = db.query(Student).filter(Student.id == student_id).first()
+def list_student_evidence(
+    student_id: int,
+    auth_student_id: Optional[int] = Depends(get_optional_student_id),
+    db: Session = Depends(get_db),
+) -> List[Evidence]:
+    """Retrieve all evidence items submitted by a specific student with token authorization checks."""
+    if auth_student_id is not None and auth_student_id != student_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You cannot access another student's evidence records.",
+        )
+
+    effective_id = auth_student_id if auth_student_id is not None else student_id
+    student = db.query(Student).filter(Student.id == effective_id).first()
     if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -112,7 +131,8 @@ def list_student_evidence(student_id: int, db: Session = Depends(get_db)) -> Lis
     return (
         db.query(Evidence)
         .options(joinedload(Evidence.skill))
-        .filter(Evidence.student_id == student_id)
+        .filter(Evidence.student_id == effective_id)
         .order_by(Evidence.created_at.desc())
         .all()
     )
+

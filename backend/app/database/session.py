@@ -17,9 +17,13 @@ if db_url.startswith("sqlite"):
         connect_args=connect_args,
     )
 else:
+    # Production PostgreSQL connection with serverless-friendly pooling & auto-reconnect
     engine = create_engine(
         db_url,
         pool_pre_ping=True,
+        pool_recycle=300,
+        pool_size=5,
+        max_overflow=10,
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

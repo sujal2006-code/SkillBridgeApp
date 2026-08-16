@@ -15,8 +15,10 @@ from app.schemas.team import (
     TeamCandidateRecommendation,
 )
 from app.services.team_matching import TeamMatchingService
+from app.core.security import get_current_student_id, get_optional_student_id
 
 router = APIRouter(prefix="/teams", tags=["Team Builder"])
+
 
 
 def _map_team_to_schema(team: Team) -> TeamRead:
@@ -84,21 +86,25 @@ def list_teams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -
 
 
 @router.post("", response_model=TeamRead, status_code=status.HTTP_201_CREATED, summary="Create a new team")
-def create_team(team_in: TeamCreate, db: Session = Depends(get_db)) -> TeamRead:
+def create_team(
+    team_in: TeamCreate,
+    auth_student_id: Optional[int] = Depends(get_optional_student_id),
+    db: Session = Depends(get_db),
+) -> TeamRead:
     """Create a new project team with initial skill requirements."""
-    # Verify creator student exists
-    creator = db.query(Student).filter(Student.id == team_in.creator_id).first()
+    effective_creator_id = auth_student_id if auth_student_id is not None else team_in.creator_id
+    creator = db.query(Student).filter(Student.id == effective_creator_id).first()
     if not creator:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Student creator with ID {team_in.creator_id} not found.",
+            detail=f"Student creator with ID {effective_creator_id} not found.",
         )
 
     # 1. Create team record
     team = Team(
         name=team_in.name,
         description=team_in.description,
-        creator_id=team_in.creator_id,
+        creator_id=effective_creator_id,
     )
     db.add(team)
     db.flush()
@@ -106,7 +112,7 @@ def create_team(team_in: TeamCreate, db: Session = Depends(get_db)) -> TeamRead:
     # 2. Add creator as first team member (Lead/Owner)
     creator_member = TeamMember(
         team_id=team.id,
-        student_id=team_in.creator_id,
+        student_id=effective_creator_id,
         role="Team Owner & Lead",
         status="joined",
         joined_at=datetime.now(timezone.utc),

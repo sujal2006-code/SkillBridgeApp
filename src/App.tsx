@@ -258,19 +258,27 @@ export default function App() {
     setCandidates(mapped);
   };
 
-  // Fetch all initial data from FastAPI backend
-  const loadBackendData = useCallback(async (targetStudentId: number) => {
+  // Fetch all initial data from FastAPI backend using verified token identity
+  const loadBackendData = useCallback(async (targetStudentId?: number) => {
     setIsLoading(true);
     setApiError(null);
 
     try {
-      // 1. Fetch Student Profile & Passport Data
-      const studentData = await studentsApi.getStudent(targetStudentId);
+      // 1. Fetch Student Profile & Passport Data via verified JWT token
+      const studentData = await studentsApi.getMyProfile().catch(async (e) => {
+        if (targetStudentId && e.status !== 401 && e.status !== 403) {
+          return await studentsApi.getStudent(targetStudentId);
+        }
+        throw e;
+      });
       processStudentData(studentData);
+      setActiveStudentId(studentData.id);
 
-      // 2. Fetch Live Internship Recommendations
+      // 2. Fetch Live Internship Recommendations via verified JWT token
       try {
-        const recsResponse = await recommendationsApi.getStudentRecommendations(targetStudentId);
+        const recsResponse = await recommendationsApi.getMyRecommendations().catch(async () => {
+          return targetStudentId ? await recommendationsApi.getStudentRecommendations(targetStudentId) : null;
+        });
         if (recsResponse && recsResponse.recommendations) {
           processRecommendations(recsResponse.recommendations);
         }
@@ -285,7 +293,7 @@ export default function App() {
         const mappedQueue: VerificationRequest[] = allEv.map((ev) => ({
           id: `vq-${ev.id}`,
           apiId: ev.id,
-          studentName: ev.student?.name || (ev.student_id === targetStudentId ? studentData.name : `Student #${ev.student_id}`),
+          studentName: ev.student?.name || (ev.student_id === studentData.id ? studentData.name : `Student #${ev.student_id}`),
           studentInitials: ((ev.student?.name || studentData.name || 'ST').split(' ').map(w => w[0]).join('').slice(0, 2)).toUpperCase(),
           title: ev.title,
           type: ev.evidence_type.charAt(0).toUpperCase() + ev.evidence_type.slice(1),
@@ -302,7 +310,7 @@ export default function App() {
 
       // 4. Fetch persistent activities from backend DB
       try {
-        const apiActs = await activitiesApi.getActivities(targetStudentId);
+        const apiActs = await activitiesApi.getActivities(studentData.id);
         processActivities(apiActs);
       } catch {
         // Fallback
@@ -317,7 +325,7 @@ export default function App() {
           currentTeam = await teamsApi.createTeam({
             name: 'AI & UX Research Project',
             description: 'Multidisciplinary AI, UI/UX, and Backend engineering team.',
-            creator_id: targetStudentId,
+            creator_id: studentData.id,
             required_skill_ids: [1, 2, 5], // Python, React, Machine Learning
           });
         }
@@ -326,7 +334,7 @@ export default function App() {
 
         const invitedIds = new Set<number>();
         (currentTeam.members || []).forEach(m => {
-          if (m.student_id !== targetStudentId) {
+          if (m.student_id !== studentData.id) {
             invitedIds.add(m.student_id);
           }
         });
@@ -348,13 +356,26 @@ export default function App() {
       setIsLoading(false);
     } catch (err: any) {
       setIsLoading(false);
-      setApiError(err.message || 'Unable to connect to the backend server. Please verify FastAPI is running at http://127.0.0.1:8000.');
+      if (err.status === 401 || err.status === 403 || err.status === 404) {
+        // Stale or invalid student session: clean invalid local state and return to login cleanly
+        localStorage.removeItem('skillbridge_auth_token');
+        localStorage.removeItem('skillbridge_student_id');
+        localStorage.removeItem('skillbridge_student_name');
+        localStorage.removeItem('skillbridge_last_screen');
+        setAuthToken(null);
+        setActiveStudentId(null);
+        setStudent(null);
+        setCurrentScreen('login');
+        showToast('Your session has expired. Please sign in or create an account to continue.', 'info');
+      } else {
+        setApiError(err.message || 'Unable to connect to the backend server. Please verify FastAPI is running at http://127.0.0.1:8000.');
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (activeStudentId && authToken) {
-      loadBackendData(activeStudentId);
+    if (authToken) {
+      loadBackendData(activeStudentId || undefined);
     } else {
       setIsLoading(false);
     }
@@ -369,9 +390,7 @@ export default function App() {
     setCurrentScreen(screen);
     if (screen !== 'login' && screen !== 'admin-login') {
       localStorage.setItem('skillbridge_last_screen', screen);
-      if (activeStudentId) {
-        studentsApi.updateStudentState(activeStudentId, screen).catch(() => {});
-      }
+      studentsApi.updateMyState(screen).catch(() => {});
     }
   };
 

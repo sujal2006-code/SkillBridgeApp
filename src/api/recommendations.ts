@@ -3,6 +3,13 @@ import { ApiStudentRecommendationsResponse, ApiRecommendation } from '../types';
 
 export const recommendationsApi = {
   /**
+   * Retrieve deterministic recommendations directly for the authenticated student via verified JWT
+   */
+  getMyRecommendations: () => {
+    return apiClient.get<ApiStudentRecommendationsResponse>('/api/recommendations/me');
+  },
+
+  /**
    * Retrieve deterministic, explainable internship recommendations for a given student
    */
   getStudentRecommendations: (studentId: number) => {
@@ -16,3 +23,4 @@ export const recommendationsApi = {
     return apiClient.get<ApiRecommendation>(`/api/recommendations/students/${studentId}/internships/${internshipId}`);
   },
 };
+

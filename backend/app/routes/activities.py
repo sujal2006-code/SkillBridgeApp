@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models.activity import Activity
 from app.schemas.activity import ActivityCreate, ActivityRead
+from app.core.security import get_current_student_id, get_optional_student_id
 
 router = APIRouter(prefix="/activities", tags=["Activities & Notifications"])
 
@@ -11,16 +12,25 @@ router = APIRouter(prefix="/activities", tags=["Activities & Notifications"])
 @router.get("", response_model=List[ActivityRead], summary="List activity log entries")
 def list_activities(
     student_id: Optional[int] = None,
+    auth_student_id: Optional[int] = Depends(get_optional_student_id),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
 ) -> List[ActivityRead]:
-    """Retrieve persistent activity and notification log entries."""
+    """Retrieve persistent activity and notification log entries for authenticated student."""
+    if auth_student_id is not None and student_id is not None and auth_student_id != student_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You cannot view activities of another student.",
+        )
+
+    effective_id = auth_student_id if auth_student_id is not None else student_id
     query = db.query(Activity)
-    if student_id is not None:
-        query = query.filter((Activity.student_id == student_id) | (Activity.student_id.is_(None)))
-    
+    if effective_id is not None:
+        query = query.filter((Activity.student_id == effective_id) | (Activity.student_id.is_(None)))
+
     return query.order_by(Activity.created_at.desc()).offset(skip).limit(limit).all()
+
 
 
 @router.post("", response_model=ActivityRead, status_code=status.HTTP_201_CREATED, summary="Create an activity log entry")
