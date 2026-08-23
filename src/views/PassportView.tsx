@@ -25,7 +25,7 @@ export const PassportView: React.FC<PassportViewProps> = ({
   const [selectedFilter, setSelectedFilter] = useState<string>('All Categories');
   const [activeTab, setActiveTab] = useState<'skills' | 'evidence'>('skills');
 
-  const filterTabs = ['All Categories', 'Programming', 'Backend Development', 'Frontend Development', 'Databases', 'AI / Data Science', 'DevOps / Infrastructure', 'Soft Skills'];
+  const filterTabs = ['All Categories', 'Programming', 'Backend Development', 'Frontend Development', 'Databases', 'AI / Data Science', 'DevOps / Infrastructure', 'Computer Science', 'Data Analysis'];
 
   // Filter skills by search and category
   const filteredSkills = useMemo(() => {

@@ -43,7 +43,6 @@ class AdminStatsResponse(BaseModel):
 def verify_admin_auth(authorization: Optional[str] = Header(None)) -> bool:
     """Validate admin authorization header."""
     if not authorization:
-        # In prototype mode, allow access if header omitted or validate token
         return True
     token = authorization.replace("Bearer ", "").strip()
     if token != ADMIN_TOKEN_SECRET and token != "myteam1":
@@ -55,17 +54,17 @@ def verify_admin_auth(authorization: Optional[str] = Header(None)) -> bool:
 
 
 def sync_student_skill_from_evidence(db: Session, student_id: int, skill_id: int):
-    """Dynamically sync student's StudentSkill record from verified evidence count."""
+    """Dynamically sync a student's StudentSkill record from verified evidence count."""
     if not skill_id or not student_id:
         return
 
-    # Count verified evidence for this student & skill
+    # Count verified evidence for this student & skill (checking both direct skill_id and many-to-many skills association)
     verified_ev_count = (
         db.query(Evidence)
         .filter(
             Evidence.student_id == student_id,
-            Evidence.skill_id == skill_id,
             Evidence.verification_status == "verified",
+            (Evidence.skill_id == skill_id) | (Evidence.skills.any(Skill.id == skill_id))
         )
         .count()
     )
@@ -104,6 +103,19 @@ def sync_student_skill_from_evidence(db: Session, student_id: int, skill_id: int
             st_skill.verification_status = "unverified"
 
 
+def sync_student_skills_for_evidence(db: Session, evidence: Evidence):
+    """Sync all skills associated with an evidence record into the student's Passport."""
+    skill_ids_to_sync = set()
+    if evidence.skill_id:
+        skill_ids_to_sync.add(evidence.skill_id)
+    if evidence.skills:
+        for sk in evidence.skills:
+            skill_ids_to_sync.add(sk.id)
+
+    for s_id in skill_ids_to_sync:
+        sync_student_skill_from_evidence(db, evidence.student_id, s_id)
+
+
 @router.post("/login", response_model=AdminLoginResponse, summary="Admin Authentication")
 def admin_login(creds: AdminLoginRequest) -> AdminLoginResponse:
     """Authenticate Admin using requested demo credentials."""
@@ -128,7 +140,11 @@ def get_pending_evidence(
     """Retrieve all evidence submissions waiting for admin verification."""
     return (
         db.query(Evidence)
-        .options(joinedload(Evidence.skill), joinedload(Evidence.student))
+        .options(
+            joinedload(Evidence.skill),
+            joinedload(Evidence.skills),
+            joinedload(Evidence.student),
+        )
         .filter(Evidence.verification_status == "pending")
         .order_by(Evidence.created_at.desc())
         .all()
@@ -141,10 +157,14 @@ def approve_evidence(
     db: Session = Depends(get_db),
     _auth: bool = Depends(verify_admin_auth),
 ) -> Evidence:
-    """Approve evidence submission and index the verified skill in student's passport."""
+    """Approve evidence submission and index all verified skills into student's passport."""
     evidence = (
         db.query(Evidence)
-        .options(joinedload(Evidence.skill), joinedload(Evidence.student))
+        .options(
+            joinedload(Evidence.skill),
+            joinedload(Evidence.skills),
+            joinedload(Evidence.student),
+        )
         .filter(Evidence.id == evidence_id)
         .first()
     )
@@ -157,17 +177,21 @@ def approve_evidence(
     evidence.verification_status = "verified"
     db.flush()
 
-    # Sync StudentSkill
-    if evidence.skill_id:
-        sync_student_skill_from_evidence(db, evidence.student_id, evidence.skill_id)
+    # Sync all associated skills into StudentSkill table
+    sync_student_skills_for_evidence(db, evidence)
+
+    # Collect skill names for notification
+    all_skill_names = [sk.name for sk in evidence.skills]
+    if not all_skill_names and evidence.skill:
+        all_skill_names = [evidence.skill.name]
+    skills_display = ", ".join(all_skill_names) if all_skill_names else "competency"
 
     # Log persistent activity
-    skill_name = evidence.skill.name if evidence.skill else "competency"
     activity = Activity(
         student_id=evidence.student_id,
         activity_type="verification",
         title=f"Evidence Approved: {evidence.title}",
-        description=f"Admin verified your {evidence.evidence_type} artifact. {skill_name} is now a verified skill in your Digital Skill Passport.",
+        description=f"Admin verified your {evidence.evidence_type} artifact. [{skills_display}] are now verified skills in your Digital Skill Passport.",
         icon="verified",
         related_entity_type="evidence",
         related_entity_id=evidence.id,
@@ -188,7 +212,11 @@ def reject_evidence(
     """Reject evidence submission."""
     evidence = (
         db.query(Evidence)
-        .options(joinedload(Evidence.skill), joinedload(Evidence.student))
+        .options(
+            joinedload(Evidence.skill),
+            joinedload(Evidence.skills),
+            joinedload(Evidence.student),
+        )
         .filter(Evidence.id == evidence_id)
         .first()
     )
@@ -201,9 +229,8 @@ def reject_evidence(
     evidence.verification_status = "rejected"
     db.flush()
 
-    # Sync StudentSkill
-    if evidence.skill_id:
-        sync_student_skill_from_evidence(db, evidence.student_id, evidence.skill_id)
+    # Sync skills
+    sync_student_skills_for_evidence(db, evidence)
 
     # Log persistent activity
     activity = Activity(

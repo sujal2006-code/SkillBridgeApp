@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
@@ -25,6 +25,8 @@ class EvidenceBase(BaseModel):
 
 class EvidenceCreate(EvidenceBase):
     student_id: Optional[int] = None
+    skill_ids: Optional[List[int]] = None
+    skill_names: Optional[List[str]] = None
 
 
 class EvidenceRead(EvidenceBase):
@@ -32,5 +34,6 @@ class EvidenceRead(EvidenceBase):
     student_id: int
     created_at: Optional[datetime] = None
     skill: Optional[SkillRead] = None
+    skills: List[SkillRead] = []
 
     model_config = ConfigDict(from_attributes=True)

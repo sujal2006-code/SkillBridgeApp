@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 from app.schemas.recommendation import SupportingEvidenceDetail
 
 
-
 # Team Skill Requirement Schemas
 class TeamSkillRequirementBase(BaseModel):
     skill_id: int
@@ -47,6 +46,36 @@ class TeamMemberRead(TeamMemberBase):
         from_attributes = True
 
 
+# Team Invitation Schemas
+class TeamInvitationCreate(BaseModel):
+    recipient_id: int
+    role: str = "Team Member"
+    message: Optional[str] = None
+
+
+class TeamInvitationRead(BaseModel):
+    id: int
+    team_id: int
+    team_name: Optional[str] = None
+    sender_id: int
+    sender_name: Optional[str] = None
+    recipient_id: int
+    recipient_name: Optional[str] = None
+    role: str
+    message: Optional[str] = None
+    status: str  # "PENDING", "ACCEPTED", "REJECTED", "CANCELLED"
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    contributed_skills: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+
+class TeamInvitationAction(BaseModel):
+    action: str = Field(..., description="'accept' or 'reject'")
+
+
 # Team Core Schemas
 class TeamCreate(BaseModel):
     name: str
@@ -65,6 +94,10 @@ class TeamRead(BaseModel):
     created_at: datetime
     members: List[TeamMemberRead] = []
     required_skills: List[TeamSkillRequirementRead] = []
+    invitations: List[TeamInvitationRead] = []
+    total_members_count: int = 0
+    skills_covered: List[str] = []
+    skills_missing: List[str] = []
 
     class Config:
         from_attributes = True
@@ -88,6 +121,7 @@ class TeamCandidateRecommendation(BaseModel):
     match_score: float
     matched_skills: List[CandidateSkillContribution] = []
     skills_contributed: List[str] = []
+    complementary_skills: List[str] = []
     missing_team_skills: List[str] = []
     explanation: str
 

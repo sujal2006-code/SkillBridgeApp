@@ -9,7 +9,7 @@ export type ScreenType =
   | 'admin'
   | 'admin-login';
 
-export type SkillCategory = 'Programming' | 'Data Science' | 'Design' | 'Soft Skills' | 'Tools' | 'Backend Development' | 'Frontend Development' | 'Databases' | 'AI / Data Science' | 'DevOps / Infrastructure' | 'Programming Languages';
+export type SkillCategory = 'Programming' | 'Data Science' | 'Design' | 'Soft Skills' | 'Tools' | 'Backend Development' | 'Frontend Development' | 'Databases' | 'AI / Data Science' | 'DevOps / Infrastructure' | 'Programming Languages' | 'Computer Science' | 'Data Analysis';
 
 export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
 
@@ -21,6 +21,9 @@ export interface ApiHealthResponse {
   status: string;
   service: string;
   version: string;
+  db_status?: string;
+  db_dialect?: string;
+  is_persistent?: boolean;
 }
 
 export interface ApiSkill {
@@ -61,6 +64,7 @@ export interface ApiEvidence {
   evidence_url?: string | null;
   created_at?: string | null;
   skill?: ApiSkill | null;
+  skills?: ApiSkill[];
   student?: ApiStudent | null;
 }
 
@@ -154,9 +158,7 @@ export interface ApiStudentLoginResponse {
   last_screen: string;
 }
 
-
 export interface ApiTeamMember {
-
   id: number;
   team_id: number;
   student_id: number;
@@ -176,6 +178,22 @@ export interface ApiTeamSkillRequirement {
   skill_name?: string | null;
 }
 
+export interface ApiTeamInvitation {
+  id: number;
+  team_id: number;
+  team_name?: string | null;
+  sender_id: number;
+  sender_name?: string | null;
+  recipient_id: number;
+  recipient_name?: string | null;
+  role: string;
+  message?: string | null;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | string;
+  created_at: string;
+  updated_at?: string | null;
+  contributed_skills?: string[];
+}
+
 export interface ApiTeam {
   id: number;
   name: string;
@@ -185,6 +203,10 @@ export interface ApiTeam {
   created_at: string;
   members: ApiTeamMember[];
   required_skills: ApiTeamSkillRequirement[];
+  invitations?: ApiTeamInvitation[];
+  total_members_count?: number;
+  skills_covered?: string[];
+  skills_missing?: string[];
 }
 
 export interface ApiCandidateSkillContribution {
@@ -204,6 +226,7 @@ export interface ApiTeamCandidateRecommendation {
   match_score: number;
   matched_skills: ApiCandidateSkillContribution[];
   skills_contributed: string[];
+  complementary_skills: string[];
   missing_team_skills: string[];
   explanation: string;
 }
@@ -220,7 +243,6 @@ export interface ApiActivity {
   is_read: boolean;
   created_at: string;
 }
-
 
 // ----------------------------------------------------
 // UI VIEW MODEL TYPES (ADAPTERS & HELPERS)
@@ -270,7 +292,6 @@ export interface Internship {
   missingSkills?: string[];
   description: string;
   applied?: boolean;
-  // Deep explainability fields
   explanation?: string;
   matchedSkillsDetails?: ApiMatchedSkill[];
   supportingEvidence?: ApiSupportingEvidence[];
@@ -287,10 +308,12 @@ export interface TeamCandidate {
   matchPercentage: number;
   aiInsight: string;
   verifiedSkills: string[];
+  skillsContributed: string[];
+  complementarySkills: string[];
+  missingSkills?: string[];
   invited?: boolean;
   education: string;
   location: string;
-  missingSkills?: string[];
   matchedSkillsDetails?: ApiCandidateSkillContribution[];
 }
 
@@ -314,5 +337,9 @@ export interface ActivityItem {
   subtitle: string;
   time: string;
   icon: string;
-  type: 'verification' | 'match' | 'team';
+  type: 'verification' | 'match' | 'team' | 'team_invitation' | 'application' | string;
+  isRead?: boolean;
+  relatedEntityType?: string;
+  relatedEntityId?: number;
+  invitationId?: number;
 }

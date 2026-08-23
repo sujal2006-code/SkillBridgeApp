@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
-import { ScreenType } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { ScreenType, ApiTeamInvitation } from '../../types';
+import { teamsApi, activitiesApi } from '../../api';
 
 interface NavbarProps {
   currentScreen: ScreenType;
   onNavigate: (screen: ScreenType) => void;
   pendingCount: number;
   studentName?: string;
+  studentId?: number;
   onSwitchStudent?: () => void;
   onLogout?: () => void;
   isAdminAuthenticated?: boolean;
+  onInvitationAction?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,12 +19,62 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   pendingCount,
   studentName = 'Alex Rivera',
+  studentId,
   onSwitchStudent,
   onLogout,
   isAdminAuthenticated = false,
+  onInvitationAction,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [invitations, setInvitations] = useState<ApiTeamInvitation[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [isActioningId, setIsActioningId] = useState<number | null>(null);
+
+  const fetchInvitations = async () => {
+    if (!studentId) return;
+    try {
+      const invs = await teamsApi.getPendingInvitations();
+      setInvitations(invs);
+      setUnreadCount(invs.length);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchInvitations();
+    const interval = setInterval(fetchInvitations, 15000);
+    return () => clearInterval(interval);
+  }, [studentId]);
+
+  const handleAccept = async (invitationId: number) => {
+    setIsActioningId(invitationId);
+    try {
+      await teamsApi.acceptInvitation(invitationId);
+      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      if (onInvitationAction) onInvitationAction();
+    } catch (err: any) {
+      alert(err.message || 'Failed to accept invitation.');
+    } finally {
+      setIsActioningId(null);
+    }
+  };
+
+  const handleReject = async (invitationId: number) => {
+    setIsActioningId(invitationId);
+    try {
+      await teamsApi.rejectInvitation(invitationId);
+      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      if (onInvitationAction) onInvitationAction();
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject invitation.');
+    } finally {
+      setIsActioningId(null);
+    }
+  };
 
   const initials = studentName
     .split(' ')
@@ -51,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="hidden lg:flex items-center gap-1">
           <button
             onClick={() => onNavigate('landing')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
               currentScreen === 'landing' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -61,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('dashboard')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
               currentScreen === 'dashboard' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -71,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('passport')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
               currentScreen === 'passport' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -81,7 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('internships')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
               currentScreen === 'internships' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -91,7 +144,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('team-builder')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
               currentScreen === 'team-builder' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -101,7 +154,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('add-evidence')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 ${
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
               currentScreen === 'add-evidence' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -114,6 +167,92 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Controls */}
         <div className="flex items-center gap-3">
+          {/* Real Notification Bell with Badge */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                fetchInvitations();
+              }}
+              className="p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors relative cursor-pointer"
+              title="Team Invitations & Notifications"
+              aria-label="Notifications"
+            >
+              <span className="material-symbols-outlined text-[22px]">notifications</span>
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-5 h-5 bg-[#ba1a1a] text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notifications Dropdown */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 animate-fadeIn text-xs">
+                <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-sm">Notifications</span>
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    {invitations.length} Pending Invites
+                  </span>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                  {invitations.length === 0 ? (
+                    <div className="py-8 px-4 text-center text-slate-500">
+                      <span className="material-symbols-outlined text-3xl text-slate-300 mb-1">mark_email_read</span>
+                      <p className="font-medium">No pending team invitations</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">You're all caught up!</p>
+                    </div>
+                  ) : (
+                    invitations.map((inv) => (
+                      <div key={inv.id} className="p-3.5 hover:bg-slate-50 flex flex-col gap-2 transition-colors">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-cyan-100 text-[#00687a] flex items-center justify-center font-bold text-xs shrink-0">
+                            <span className="material-symbols-outlined text-[18px]">groups</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-800">
+                              Invitation to join <span className="text-[#00687a]">"{inv.team_name}"</span>
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              From: {inv.sender_name || 'Teammate'} • Role: <strong className="text-slate-700">{inv.role}</strong>
+                            </p>
+                            {inv.contributed_skills && inv.contributed_skills.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {inv.contributed_skills.map((sk, idx) => (
+                                  <span key={idx} className="text-[9px] font-bold bg-emerald-50 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-200">
+                                    ✓ {sk}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 justify-end pt-1">
+                          <button
+                            onClick={() => handleReject(inv.id)}
+                            disabled={isActioningId === inv.id}
+                            className="px-3 py-1 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Decline
+                          </button>
+                          <button
+                            onClick={() => handleAccept(inv.id)}
+                            disabled={isActioningId === inv.id}
+                            className="px-3.5 py-1 text-[11px] font-bold text-white bg-[#00687a] hover:bg-[#004e5c] rounded-lg transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Accept & Join</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Admin Portal Quick Link */}
           <button
             onClick={() => {
@@ -123,7 +262,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onNavigate('admin-login');
               }
             }}
-            className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+            className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer ${
               currentScreen === 'admin' || currentScreen === 'admin-login'
                 ? 'bg-purple-100 text-purple-800 border-purple-300 font-bold'
                 : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200'
@@ -138,17 +277,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             )}
           </button>
-
-          {/* Quick Add Evidence button */}
-          {currentScreen !== 'landing' && (
-            <button
-              onClick={() => onNavigate('add-evidence')}
-              className="hidden md:flex bg-[#00687a] text-white px-3.5 py-2 rounded-lg text-xs font-semibold hover:brightness-110 transition-all shadow-xs items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">upload</span>
-              Add Evidence
-            </button>
-          )}
 
           {/* Student Profile Pill / Switcher */}
           <div className="relative">
@@ -180,7 +308,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       setShowUserMenu(false);
                       onNavigate('passport');
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium flex items-center gap-2"
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium flex items-center gap-2 cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[16px] text-[#00687a]">badge</span>
                     <span>View My Passport</span>
@@ -191,7 +319,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setShowUserMenu(false);
                         onSwitchStudent();
                       }}
-                      className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium flex items-center gap-2"
+                      className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium flex items-center gap-2 cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[16px] text-purple-600">switch_account</span>
                       <span>Switch Account</span>
@@ -204,7 +332,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setShowUserMenu(false);
                         onLogout();
                       }}
-                      className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 font-medium flex items-center gap-2 border-t border-slate-100 mt-1"
+                      className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 font-medium flex items-center gap-2 border-t border-slate-100 mt-1 cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[16px]">logout</span>
                       <span>Log Out</span>
@@ -219,5 +347,3 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
-
-

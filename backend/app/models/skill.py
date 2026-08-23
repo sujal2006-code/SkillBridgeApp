@@ -14,6 +14,7 @@ class Skill(Base):
     # Relationships
     student_skills = relationship("StudentSkill", back_populates="skill", cascade="all, delete-orphan")
     evidence = relationship("Evidence", back_populates="skill")
+    evidence_list = relationship("Evidence", secondary="evidence_skills", back_populates="skills")
     internship_skills = relationship("InternshipSkill", back_populates="skill", cascade="all, delete-orphan")
 
 

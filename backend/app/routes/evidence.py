@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database.session import get_db
 from app.models.evidence import Evidence
 from app.models.student import Student
+from app.models.skill import Skill
 from app.models.activity import Activity
 from app.schemas.evidence import EvidenceCreate, EvidenceRead
 from app.core.security import get_current_student_id, get_optional_student_id
@@ -22,7 +23,7 @@ def create_evidence(
     auth_student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ) -> Evidence:
-    """Submit new evidence item (coursework, project, competition, certificate, internship)."""
+    """Submit new evidence item with support for normalized multiple skills."""
     student = db.query(Student).filter(Student.id == auth_student_id).first()
     if not student:
         raise HTTPException(
@@ -30,20 +31,57 @@ def create_evidence(
             detail="Authenticated student not found.",
         )
 
-    evidence_data = evidence_in.model_dump()
-    evidence_data["student_id"] = auth_student_id
-    evidence = Evidence(**evidence_data)
+    evidence_dict = evidence_in.model_dump(exclude={"skill_ids", "skill_names"})
+    evidence_dict["student_id"] = auth_student_id
+    evidence = Evidence(**evidence_dict)
+
+    # Resolve all demonstrated skills (via skill_ids or skill_names or legacy skill_id)
+    skills_to_link: List[Skill] = []
+    seen_skill_ids = set()
+
+    if evidence_in.skill_ids:
+        for s_id in evidence_in.skill_ids:
+            if s_id and s_id not in seen_skill_ids:
+                sk = db.query(Skill).filter(Skill.id == s_id).first()
+                if sk:
+                    skills_to_link.append(sk)
+                    seen_skill_ids.add(sk.id)
+
+    if evidence_in.skill_names:
+        for s_name in evidence_in.skill_names:
+            s_clean = s_name.strip()
+            if s_clean:
+                sk = db.query(Skill).filter(Skill.name.ilike(s_clean)).first()
+                if not sk:
+                    sk = Skill(name=s_clean, category="General Competency", description=f"Skill in {s_clean}")
+                    db.add(sk)
+                    db.flush()
+                if sk.id not in seen_skill_ids:
+                    skills_to_link.append(sk)
+                    seen_skill_ids.add(sk.id)
+
+    if evidence_in.skill_id and evidence_in.skill_id not in seen_skill_ids:
+        sk = db.query(Skill).filter(Skill.id == evidence_in.skill_id).first()
+        if sk:
+            skills_to_link.append(sk)
+            seen_skill_ids.add(sk.id)
+
+    # Set primary legacy skill_id to first skill if available
+    if skills_to_link and not evidence.skill_id:
+        evidence.skill_id = skills_to_link[0].id
+
+    evidence.skills = skills_to_link
     db.add(evidence)
     db.flush()
 
-
     # Log persistent activity
     type_cap = evidence.evidence_type.capitalize()
+    skill_names_str = ", ".join(s.name for s in skills_to_link) if skills_to_link else "skills"
     activity = Activity(
         student_id=evidence.student_id,
         activity_type="evidence_submitted",
         title=f"{type_cap} \"{evidence.title}\" submitted",
-        description=f"Submitted {type_cap.lower()} for verification and skill passport indexing.",
+        description=f"Submitted {type_cap.lower()} demonstrating {skill_names_str} for Skill Passport verification.",
         icon="upload_file",
         related_entity_type="evidence",
         related_entity_id=evidence.id,
@@ -57,10 +95,14 @@ def create_evidence(
 
 @router.get("/evidence", response_model=List[EvidenceRead])
 def list_all_evidence(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> List[Evidence]:
-    """Retrieve all submitted evidence items across students (for admin / verification queue)."""
+    """Retrieve all submitted evidence items across students with full skills relationships."""
     return (
         db.query(Evidence)
-        .options(joinedload(Evidence.skill), joinedload(Evidence.student))
+        .options(
+            joinedload(Evidence.skill),
+            joinedload(Evidence.skills),
+            joinedload(Evidence.student),
+        )
         .order_by(Evidence.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -74,8 +116,13 @@ def update_evidence_status(
     status_update: EvidenceStatusUpdate,
     db: Session = Depends(get_db),
 ) -> Evidence:
-    """Update verification status of an evidence item."""
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    """Update verification status of an evidence item and sync all associated skills."""
+    evidence = (
+        db.query(Evidence)
+        .options(joinedload(Evidence.skills), joinedload(Evidence.skill))
+        .filter(Evidence.id == evidence_id)
+        .first()
+    )
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -83,10 +130,9 @@ def update_evidence_status(
         )
     evidence.verification_status = status_update.verification_status
 
-    # Sync StudentSkill table
-    if evidence.skill_id:
-        from app.routes.admin import sync_student_skill_from_evidence
-        sync_student_skill_from_evidence(db, evidence.student_id, evidence.skill_id)
+    # Sync all associated skills into StudentSkill table
+    from app.routes.admin import sync_student_skills_for_evidence
+    sync_student_skills_for_evidence(db, evidence)
 
     # Log persistent activity
     status_title = "verified" if status_update.verification_status == "verified" else "reviewed"
@@ -128,9 +174,11 @@ def list_student_evidence(
         )
     return (
         db.query(Evidence)
-        .options(joinedload(Evidence.skill))
+        .options(
+            joinedload(Evidence.skill),
+            joinedload(Evidence.skills),
+        )
         .filter(Evidence.student_id == effective_id)
         .order_by(Evidence.created_at.desc())
         .all()
     )
-

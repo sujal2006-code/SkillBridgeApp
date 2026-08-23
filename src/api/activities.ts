@@ -21,6 +21,14 @@ export const activitiesApi = {
   },
 
   /**
+   * Get unread notifications badge count
+   */
+  getUnreadCount: (studentId?: number) => {
+    const query = studentId ? `?student_id=${studentId}` : '';
+    return apiClient.get<{ unread_count: number }>(`/api/activities/unread-count${query}`);
+  },
+
+  /**
    * Log a new activity item
    */
   createActivity: (payload: CreateActivityPayload) => {

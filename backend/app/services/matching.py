@@ -130,6 +130,8 @@ class MatchingService:
                 all_verified_evidence.append(ev_detail)
                 if ev.skill_id:
                     verified_evidence_by_skill.setdefault(ev.skill_id, []).append(ev_detail)
+                for sk in ev.skills:
+                    verified_evidence_by_skill.setdefault(sk.id, []).append(ev_detail)
 
         matched_skills: List[MatchedSkillDetail] = []
         missing_skills: List[str] = []

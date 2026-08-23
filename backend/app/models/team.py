@@ -14,9 +14,10 @@ class Team(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    creator = relationship("Student")
+    creator = relationship("Student", foreign_keys=[creator_id])
     members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
     required_skills = relationship("TeamSkillRequirement", back_populates="team", cascade="all, delete-orphan")
+    invitations = relationship("TeamInvitation", back_populates="team", cascade="all, delete-orphan")
 
 
 class TeamMember(Base):
@@ -47,3 +48,23 @@ class TeamSkillRequirement(Base):
     # Relationships
     team = relationship("Team", back_populates="required_skills")
     skill = relationship("Skill")
+
+
+class TeamInvitation(Base):
+    __tablename__ = "team_invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    recipient_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String, nullable=False, default="Team Member")
+    message = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="PENDING", index=True)  # "PENDING", "ACCEPTED", "REJECTED", "CANCELLED"
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    team = relationship("Team", back_populates="invitations")
+    sender = relationship("Student", foreign_keys=[sender_id])
+    recipient = relationship("Student", foreign_keys=[recipient_id])

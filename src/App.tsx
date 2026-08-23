@@ -54,6 +54,11 @@ const AVATAR_LIST = [
   'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
 ];
 
+const VALID_SCREENS: ScreenType[] = [
+  'login', 'landing', 'passport', 'dashboard',
+  'internships', 'team-builder', 'add-evidence', 'admin', 'admin-login'
+];
+
 export default function App() {
   const [authToken, setAuthToken] = useState<string | null>(() => {
     return localStorage.getItem('skillbridge_auth_token');
@@ -63,6 +68,10 @@ export default function App() {
     return saved ? Number(saved) : null;
   });
   const [currentScreen, setCurrentScreen] = useState<ScreenType>(() => {
+    const hash = window.location.hash.replace('#/', '').trim();
+    if (hash && VALID_SCREENS.includes(hash as ScreenType)) {
+      return hash as ScreenType;
+    }
     const token = localStorage.getItem('skillbridge_auth_token');
     if (!token) return 'login';
     const savedScreen = localStorage.getItem('skillbridge_last_screen') as ScreenType;
@@ -73,7 +82,7 @@ export default function App() {
   });
   const [activeTeamId, setActiveTeamId] = useState<number | null>(null);
   
-  // App state backed by live FastAPI backend
+  // App state backed by live FastAPI backend & Neon PostgreSQL
   const [student, setStudent] = useState<ApiStudent | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
@@ -98,32 +107,49 @@ export default function App() {
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage(message);
     setToastType(type);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
   };
 
-  // Convert backend student skills & evidence into frontend view models
+  // Synchronize URL hash and browser history popstate (Chrome Back / Forward Navigation)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.screen) {
+        setCurrentScreen(event.state.screen);
+      } else {
+        const hash = window.location.hash.replace('#/', '').trim();
+        if (hash && VALID_SCREENS.includes(hash as ScreenType)) {
+          setCurrentScreen(hash as ScreenType);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Update URL hash whenever currentScreen changes
+  useEffect(() => {
+    if (window.location.hash !== `#/${currentScreen}`) {
+      window.history.replaceState({ screen: currentScreen }, '', `#/${currentScreen}`);
+    }
+  }, [currentScreen]);
+
+  // Convert backend Student data into UI formats
   const processStudentData = (studentData: ApiStudent) => {
     setStudent(studentData);
-    setActiveStudentId(studentData.id);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('skillbridge_student_name', studentData.name);
-      localStorage.setItem('skillbridge_student_id', String(studentData.id));
-    }
 
-    // Convert skills
-
+    // Convert student skills list into UI Skill format
     if (studentData.skills) {
-      const verifiedStudentSkills = studentData.skills.filter(s => s.verification_status === 'verified');
-      const mappedSkills: Skill[] = verifiedStudentSkills.map((ss) => {
+      const mappedSkills: Skill[] = studentData.skills.map((ss) => {
         const skillName = ss.skill?.name || `Skill #${ss.skill_id}`;
         const category = ss.skill?.category || 'Programming';
         const isVerified = ss.verification_status === 'verified';
         
-        // Dynamic proficiency formula: 1 verified = 84%, 2 = 92%, 3 = 96%, 4+ = 99%
+        // Count verified evidence for this skill (checking both direct skill_id and many-to-many skills association)
         const relatedEvCount = (studentData.evidence || []).filter(
-          e => e.skill_id === ss.skill_id && e.verification_status === 'verified'
+          (e) =>
+            e.verification_status === 'verified' &&
+            (e.skill_id === ss.skill_id ||
+              (e.skills && e.skills.some((sk) => sk.id === ss.skill_id)))
         ).length;
 
         let percentage = 84;
@@ -143,7 +169,13 @@ export default function App() {
           percentage,
           evidenceCount: relatedEvCount > 0 ? relatedEvCount : 1,
           verifiedByAi: isVerified,
-          evidenceIds: (studentData.evidence || []).filter(e => e.skill_id === ss.skill_id).map(e => `ev-${e.id}`),
+          evidenceIds: (studentData.evidence || [])
+            .filter(
+              (e) =>
+                e.skill_id === ss.skill_id ||
+                (e.skills && e.skills.some((sk) => sk.id === ss.skill_id))
+            )
+            .map((e) => `ev-${e.id}`),
         };
       });
       setSkills(mappedSkills);
@@ -151,11 +183,16 @@ export default function App() {
       setSkills([]);
     }
 
-    // Convert evidence list
+    // Convert evidence list with multi-skill normalization
     if (studentData.evidence) {
       const mappedEvidence: EvidenceItem[] = studentData.evidence.map((ev) => {
         const typeCapitalized = ev.evidence_type.charAt(0).toUpperCase() + ev.evidence_type.slice(1);
-        const skillName = ev.skill?.name;
+        const allSkillNames =
+          ev.skills && ev.skills.length > 0
+            ? ev.skills.map((s) => s.name)
+            : ev.skill?.name
+            ? [ev.skill.name]
+            : ['General Engineering'];
 
         return {
           id: `ev-${ev.id}`,
@@ -163,7 +200,7 @@ export default function App() {
           title: ev.title,
           type: typeCapitalized,
           institution: ev.issuer || 'SkillBridge Verification Protocol',
-          skills: skillName ? [skillName] : ['General Engineering'],
+          skills: allSkillNames,
           date: ev.created_at ? ev.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
           verificationStatus: (ev.verification_status as any) || 'pending',
           score: 95,
@@ -196,7 +233,7 @@ export default function App() {
         matchPercentage: Math.round(rec.match_score),
         isTopMatch,
         postedDate: 'Active',
-        verifiedSkills: rec.matched_skills.map(ms => ms.skill_name),
+        verifiedSkills: rec.matched_skills.map((ms) => ms.skill_name),
         missingSkills: rec.missing_skills,
         description: rec.description,
         applied: false,
@@ -214,9 +251,9 @@ export default function App() {
   const processActivities = (apiActivities: ApiActivity[]) => {
     const mapped: ActivityItem[] = apiActivities.map((act) => {
       let icon = act.icon || 'notifications';
-      let type: 'verification' | 'match' | 'team' = 'verification';
+      let type: 'verification' | 'match' | 'team' | 'team_invitation' = 'verification';
 
-      if (act.activity_type === 'team') {
+      if (act.activity_type === 'team' || act.activity_type === 'team_invitation') {
         type = 'team';
         icon = 'person_add';
       } else if (act.activity_type === 'match' || act.activity_type === 'application') {
@@ -234,6 +271,9 @@ export default function App() {
         time: act.created_at ? act.created_at.slice(0, 10) : 'Recent',
         icon,
         type,
+        isRead: act.is_read,
+        relatedEntityType: act.related_entity_type || undefined,
+        relatedEntityId: act.related_entity_id || undefined,
       };
     });
     setActivities(mapped);
@@ -249,66 +289,98 @@ export default function App() {
         id: `candidate-${rec.candidate_id}`,
         name: rec.candidate_name,
         role: rec.role_suggestion,
-        level: 'Verified Skill Passport',
+        level: 'Intermediate',
         avatar,
         matchPercentage: Math.round(rec.match_score),
         aiInsight: rec.explanation,
-        verifiedSkills: rec.skills_contributed.length > 0 ? rec.skills_contributed : ['General Engineering'],
+        verifiedSkills: (rec.matched_skills || []).map((ms) => ms.skill_name),
+        skillsContributed: rec.skills_contributed || [],
+        complementarySkills: rec.complementary_skills || [],
+        missingSkills: rec.missing_team_skills || [],
         invited: isInvited,
-        education: rec.university || 'Verified Academic Credentials',
-        location: 'Verified Student Passport',
-        missingSkills: rec.missing_team_skills,
+        education: rec.university || 'SkillBridge Academic Network',
+        location: 'Verified Student Network',
         matchedSkillsDetails: rec.matched_skills,
       };
     });
     setCandidates(mapped);
   };
 
-  // Fetch all initial data from FastAPI backend using verified token identity
+  // Main data loader connected to live backend & Neon DB
   const loadBackendData = useCallback(async (targetStudentId?: number) => {
     setIsLoading(true);
     setApiError(null);
 
     try {
-      // 1. Fetch Student Profile & Passport Data via verified JWT token
-      const studentData = await studentsApi.getMyProfile().catch(async (e) => {
-        if (targetStudentId && e.status !== 401 && e.status !== 403) {
-          return await studentsApi.getStudent(targetStudentId);
-        }
-        throw e;
-      });
-      processStudentData(studentData);
+      // 1. Fetch current authenticated student profile
+      const studentData = await studentsApi.getMyProfile();
       setActiveStudentId(studentData.id);
+      processStudentData(studentData);
 
-      // 2. Fetch Live Internship Recommendations via verified JWT token
+      // 2. Fetch explainable internship recommendations
       try {
-        const recsResponse = await recommendationsApi.getMyRecommendations().catch(async () => {
-          return targetStudentId ? await recommendationsApi.getStudentRecommendations(targetStudentId) : null;
-        });
-        if (recsResponse && recsResponse.recommendations) {
-          processRecommendations(recsResponse.recommendations);
+        const recData = await recommendationsApi.getRecommendationsForStudent(studentData.id);
+        if (recData && recData.recommendations) {
+          processRecommendations(recData.recommendations);
         }
       } catch {
-        // If student has 0 skills or recommendation fails
-        setInternships([]);
+        // Fallback to raw internships
+        const rawInternships = await recommendationsApi.getInternships();
+        const mappedFallback: Internship[] = rawInternships.map((raw) => ({
+          id: `internship-${raw.id}`,
+          apiId: raw.id,
+          title: raw.title,
+          company: raw.company,
+          logo: LOGO_MAP[raw.company] || DEFAULT_LOGO,
+          location: raw.location,
+          type: raw.location.toLowerCase().includes('remote') ? 'Remote' : 'Hybrid',
+          employmentType: 'Internship',
+          matchPercentage: 75,
+          postedDate: 'Active',
+          verifiedSkills: raw.required_skills || [],
+          description: raw.description,
+          applied: false,
+        }));
+        setInternships(mappedFallback);
       }
 
-      // 3. Fetch Evidence Queue for Admin Dashboard
+      // 3. Fetch evidence verification queue (Admin queue)
       try {
         const allEv = await evidenceApi.getAllEvidence();
-        const mappedQueue: VerificationRequest[] = allEv.map((ev) => ({
-          id: `vq-${ev.id}`,
-          apiId: ev.id,
-          studentName: ev.student?.name || (ev.student_id === studentData.id ? studentData.name : `Student #${ev.student_id}`),
-          studentInitials: ((ev.student?.name || studentData.name || 'ST').split(' ').map(w => w[0]).join('').slice(0, 2)).toUpperCase(),
-          title: ev.title,
-          type: ev.evidence_type.charAt(0).toUpperCase() + ev.evidence_type.slice(1),
-          submittedTime: ev.created_at ? ev.created_at.slice(0, 10) : 'Recent',
-          skills: ev.skill ? [ev.skill.name] : ['Technical Competency'],
-          status: ev.verification_status === 'verified' ? 'approved' : ev.verification_status === 'rejected' ? 'rejected' : 'pending',
-          evidenceSnippet: ev.description || 'Artifact submitted for evaluation.',
-          evidenceUrl: ev.evidence_url || undefined,
-        }));
+        const mappedQueue: VerificationRequest[] = allEv.map((ev) => {
+          const allSkills =
+            ev.skills && ev.skills.length > 0
+              ? ev.skills.map((s) => s.name)
+              : ev.skill?.name
+              ? [ev.skill.name]
+              : ['Technical Competency'];
+
+          return {
+            id: `vq-${ev.id}`,
+            apiId: ev.id,
+            studentName:
+              ev.student?.name ||
+              (ev.student_id === studentData.id ? studentData.name : `Student #${ev.student_id}`),
+            studentInitials: (ev.student?.name || studentData.name || 'ST')
+              .split(' ')
+              .map((w) => w[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase(),
+            title: ev.title,
+            type: ev.evidence_type.charAt(0).toUpperCase() + ev.evidence_type.slice(1),
+            submittedTime: ev.created_at ? ev.created_at.slice(0, 10) : 'Recent',
+            skills: allSkills,
+            status:
+              ev.verification_status === 'verified'
+                ? 'approved'
+                : ev.verification_status === 'rejected'
+                ? 'rejected'
+                : 'pending',
+            evidenceSnippet: ev.description || 'Artifact submitted for evaluation.',
+            evidenceUrl: ev.evidence_url || undefined,
+          };
+        });
         setQueue(mappedQueue);
       } catch {
         // Ignore queue failure
@@ -329,19 +401,24 @@ export default function App() {
 
         if (!currentTeam) {
           currentTeam = await teamsApi.createTeam({
-            name: 'AI & UX Research Project',
+            name: 'AI & UX Research Platform',
             description: 'Multidisciplinary AI, UI/UX, and Backend engineering team.',
             creator_id: studentData.id,
-            required_skill_ids: [1, 2, 5], // Python, React, Machine Learning
+            required_skill_ids: [1, 2, 5],
           });
         }
 
         setActiveTeamId(currentTeam.id);
 
         const invitedIds = new Set<number>();
-        (currentTeam.members || []).forEach(m => {
+        (currentTeam.members || []).forEach((m) => {
           if (m.student_id !== studentData.id) {
             invitedIds.add(m.student_id);
+          }
+        });
+        (currentTeam.invitations || []).forEach((inv) => {
+          if (inv.status === 'PENDING') {
+            invitedIds.add(inv.recipient_id);
           }
         });
 
@@ -363,7 +440,6 @@ export default function App() {
     } catch (err: any) {
       setIsLoading(false);
       if (err.status === 401 || err.status === 403 || err.status === 404) {
-        // Stale or invalid student session: clean invalid local state and return to login cleanly
         localStorage.removeItem('skillbridge_auth_token');
         localStorage.removeItem('skillbridge_student_id');
         localStorage.removeItem('skillbridge_student_name');
@@ -374,7 +450,10 @@ export default function App() {
         setCurrentScreen('login');
         showToast('Your session has expired. Please sign in or create an account to continue.', 'info');
       } else {
-        setApiError(err.message || 'Unable to connect to the backend server. Please verify FastAPI is running at http://127.0.0.1:8000.');
+        setApiError(
+          err.message ||
+            'Unable to connect to the backend server. Please verify FastAPI is running.'
+        );
       }
     }
   }, []);
@@ -387,12 +466,12 @@ export default function App() {
     }
   }, [loadBackendData, activeStudentId, authToken]);
 
-  // Navigation handler that persists current screen to backend and localStorage
+  // Navigation handler with HTML5 History and persistent screen state
   const handleNavigate = (screen: ScreenType) => {
     if (screen === 'admin' && !adminToken) {
-      setCurrentScreen('admin-login');
-      return;
+      screen = 'admin-login';
     }
+    window.history.pushState({ screen }, '', `#/${screen}`);
     setCurrentScreen(screen);
     if (screen !== 'login' && screen !== 'admin-login') {
       localStorage.setItem('skillbridge_last_screen', screen);
@@ -412,13 +491,15 @@ export default function App() {
     // Resume exact screen where user last discontinued
     const backendScreen = authData.last_screen as ScreenType;
     const localScreen = localStorage.getItem('skillbridge_last_screen') as ScreenType;
-    const resumeScreen = (backendScreen && backendScreen !== 'login')
-      ? backendScreen
-      : (localScreen && localScreen !== 'login')
+    const resumeScreen =
+      backendScreen && backendScreen !== 'login'
+        ? backendScreen
+        : localScreen && localScreen !== 'login'
         ? localScreen
         : 'dashboard';
 
     localStorage.setItem('skillbridge_last_screen', resumeScreen);
+    window.history.pushState({ screen: resumeScreen }, '', `#/${resumeScreen}`);
     setCurrentScreen(resumeScreen);
 
     await loadBackendData(studentId);
@@ -439,6 +520,7 @@ export default function App() {
     setInternships([]);
     setCandidates([]);
     setActivities([]);
+    window.history.pushState({ screen: 'login' }, '', '#/login');
     setCurrentScreen('login');
     showToast('Logged out successfully.', 'info');
   };
@@ -464,18 +546,18 @@ export default function App() {
     showToast(`Evidence "${newEvidenceData.title}" submitted. Status: PENDING VERIFICATION.`);
   };
 
-
-
   // Handler: Apply for Internship
   const handleApplyInternship = async (internshipId: string) => {
-    setInternships(internships.map(item => {
-      if (item.id === internshipId) {
-        return { ...item, applied: true };
-      }
-      return item;
-    }));
+    setInternships(
+      internships.map((item) => {
+        if (item.id === internshipId) {
+          return { ...item, applied: true };
+        }
+        return item;
+      })
+    );
 
-    const appliedItem = internships.find(i => i.id === internshipId);
+    const appliedItem = internships.find((i) => i.id === internshipId);
     if (appliedItem && activeStudentId) {
       try {
         await activitiesApi.createActivity({
@@ -498,32 +580,34 @@ export default function App() {
     }
   };
 
-  // Handler: Invite Team Candidate
+  // Handler: Invite Team Candidate with persistent backend invitation
   const handleInviteCandidate = async (candidateIdStr: string) => {
     const candidateId = parseInt(candidateIdStr.replace('candidate-', ''), 10);
 
-    setCandidates(candidates.map(item => {
-      if (item.id === candidateIdStr) {
-        return { ...item, invited: true };
-      }
-      return item;
-    }));
+    setCandidates(
+      candidates.map((item) => {
+        if (item.id === candidateIdStr) {
+          return { ...item, invited: true };
+        }
+        return item;
+      })
+    );
 
-    const invitedCand = candidates.find(c => c.id === candidateIdStr);
+    const invitedCand = candidates.find((c) => c.id === candidateIdStr);
 
     if (activeTeamId && !isNaN(candidateId)) {
       try {
-        await teamsApi.addTeamMember(activeTeamId, {
-          student_id: candidateId,
+        await teamsApi.createTeamInvitation(activeTeamId, {
+          recipient_id: candidateId,
           role: invitedCand?.role || 'Team Member',
-          status: 'invited',
+          message: `Join our team on ${selectedEvidence?.title || 'SkillBridge Project'}`,
         });
 
         if (activeStudentId) {
           await loadBackendData(activeStudentId);
         }
       } catch {
-        // Keep optimistic update
+        // Optimistic fallback
       }
     }
 
@@ -540,12 +624,12 @@ export default function App() {
         if (activeStudentId) {
           await loadBackendData(activeStudentId);
         }
-        showToast('Evidence approved! Verified competency added to student passport.');
+        showToast('Evidence approved! All verified skills indexed into student passport.');
       } catch (err: any) {
         showToast(err.message || 'Failed to approve evidence.', 'error');
       }
     }
-    setQueue(queue.map(q => q.id === id ? { ...q, status: 'approved' } : q));
+    setQueue(queue.map((q) => (q.id === id ? { ...q, status: 'approved' } : q)));
   };
 
   // Handler: Admin reject evidence
@@ -561,7 +645,7 @@ export default function App() {
         showToast(err.message || 'Failed to reject evidence.', 'error');
       }
     }
-    setQueue(queue.map(q => q.id === id ? { ...q, status: 'rejected' } : q));
+    setQueue(queue.map((q) => (q.id === id ? { ...q, status: 'rejected' } : q)));
   };
 
   const handleViewSnippet = (req: VerificationRequest) => {
@@ -572,20 +656,20 @@ export default function App() {
       institution: 'Submitted by ' + req.studentName,
       skills: req.skills,
       date: req.submittedTime,
-      verificationStatus: req.status === 'approved' ? 'verified' : req.status === 'rejected' ? 'rejected' : 'pending',
+      verificationStatus:
+        req.status === 'approved' ? 'verified' : req.status === 'rejected' ? 'rejected' : 'pending',
       score: 95,
       fileName: `${req.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pdf`,
       url: req.evidenceUrl,
-      aiFeedback: req.evidenceSnippet || 'Verification record submitted for evaluation.'
+      aiFeedback: req.evidenceSnippet || 'Verification record submitted for evaluation.',
     });
   };
 
-  const verifiedSkillsCount = skills.filter(s => s.verifiedByAi).length;
-  const verifiedEvidenceCount = evidenceList.filter(e => e.verificationStatus === 'verified').length;
-  const pendingEvidenceCount = evidenceList.filter(e => e.verificationStatus === 'pending').length;
-  const pendingQueueCount = queue.filter(q => q.status === 'pending').length;
+  const verifiedSkillsCount = skills.filter((s) => s.verifiedByAi).length;
+  const verifiedEvidenceCount = evidenceList.filter((e) => e.verificationStatus === 'verified').length;
+  const pendingEvidenceCount = evidenceList.filter((e) => e.verificationStatus === 'pending').length;
+  const pendingQueueCount = queue.filter((q) => q.status === 'pending').length;
 
-  // Dynamic Passport completion percentage (0 skills = 0%, 1 = 20%, 2 = 40%, 3 = 60%, 4 = 80%, 5+ = 100%)
   const completionPercentage = Math.min(100, verifiedSkillsCount * 20);
 
   // If user is not authenticated or explicitly on login screen, render LoginView
@@ -604,15 +688,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f7f9fb] text-[#191c1e] flex flex-col font-['Inter',sans-serif]">
-      {/* Top Navbar */}
+      {/* Top Navbar with Notification Center */}
       <Navbar
         currentScreen={currentScreen}
         onNavigate={handleNavigate}
         pendingCount={pendingQueueCount}
         studentName={student?.name || 'Student'}
+        studentId={activeStudentId || undefined}
         onSwitchStudent={handleLogout}
         onLogout={handleLogout}
         isAdminAuthenticated={!!adminToken}
+        onInvitationAction={() => loadBackendData(activeStudentId || undefined)}
       />
 
       {/* Screen Render */}
@@ -678,7 +764,6 @@ export default function App() {
           />
         )}
 
-
         {currentScreen === 'add-evidence' && (
           <AddEvidenceView
             studentId={student?.id || activeStudentId || undefined}
@@ -687,12 +772,11 @@ export default function App() {
           />
         )}
 
-
         {currentScreen === 'admin-login' && (
           <AdminLoginView
             onLoginSuccess={() => {
               setAdminToken(localStorage.getItem('skillbridge_admin_token'));
-              setCurrentScreen('admin');
+              handleNavigate('admin');
               showToast('Admin logged in successfully!');
             }}
             onNavigate={handleNavigate}
@@ -712,7 +796,7 @@ export default function App() {
             onLogout={() => {
               localStorage.removeItem('skillbridge_admin_token');
               setAdminToken(null);
-              setCurrentScreen('dashboard');
+              handleNavigate('dashboard');
               showToast('Admin logged out.');
             }}
           />

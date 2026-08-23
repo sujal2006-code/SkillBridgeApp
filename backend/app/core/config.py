@@ -110,7 +110,11 @@ class Settings(BaseSettings):
         return False
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env"),
+            ".env",
+            "backend/.env",
+        ),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",

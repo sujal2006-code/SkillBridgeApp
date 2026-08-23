@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EvidenceItem, ScreenType, ApiSkill } from '../types';
 import { skillsApi, evidenceApi } from '../api';
+import { SearchableSkillSelect } from '../components/common/SearchableSkillSelect';
 
 interface AddEvidenceViewProps {
   studentId?: number;
@@ -13,13 +14,11 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
   onAddEvidence,
   onNavigate,
 }) => {
-
   const [type, setType] = useState<EvidenceItem['type']>('Project');
   const [title, setTitle] = useState('');
   const [institution, setInstitution] = useState('');
   const [description, setDescription] = useState('');
-  const [skills, setSkills] = useState<string[]>(['Python', 'FastAPI']);
-  const [newSkillInput, setNewSkillInput] = useState('');
+  const [skills, setSkills] = useState<string[]>(['Python', 'Machine Learning']);
   const [fileName, setFileName] = useState('');
   const [url, setUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,28 +32,9 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
     skillsApi.getSkills()
       .then((data) => setAvailableSkills(data))
       .catch(() => {
-        // Fallback default suggestions
+        // Fallback default
       });
   }, []);
-
-  const handleAddSkill = (skillToAdd: string) => {
-    const trimmed = skillToAdd.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills([...skills, trimmed]);
-      setNewSkillInput('');
-    }
-  };
-
-  const handleRemoveSkill = (skillToRemove: string) => {
-    setSkills(skills.filter((s) => s !== skillToRemove));
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      handleAddSkill(newSkillInput);
-    }
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -68,7 +48,7 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
 
     if (!title.trim()) newErrors.title = 'Title is required';
     if (!institution.trim()) newErrors.institution = 'Institution / Source is required';
-    if (skills.length === 0) newErrors.skills = 'Please add at least one skill';
+    if (skills.length === 0) newErrors.skills = 'Please select at least one skill demonstrated';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -89,17 +69,24 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
     };
     const backendEvidenceType = backendTypeMap[type] || 'project';
 
-    // Find primary matching skill ID from available backend skills
-    const primarySkillName = skills[0];
-    const matchedSkill = availableSkills.find(
-      (s) => s.name.toLowerCase() === primarySkillName.toLowerCase()
-    );
+    // Map skill names to skill IDs where found in available backend skills
+    const resolvedSkillIds: number[] = [];
+    skills.forEach((sName) => {
+      const match = availableSkills.find(
+        (sk) => sk.name.toLowerCase() === sName.toLowerCase()
+      );
+      if (match) {
+        resolvedSkillIds.push(match.id);
+      }
+    });
 
     try {
-      // Call live backend API to persist evidence record with status PENDING
+      // Call live backend API to persist evidence record with ALL selected skills
       const createdEvidence = await evidenceApi.createEvidence({
         student_id: studentId,
-        skill_id: matchedSkill ? matchedSkill.id : undefined,
+        skill_id: resolvedSkillIds.length > 0 ? resolvedSkillIds[0] : undefined,
+        skill_ids: resolvedSkillIds,
+        skill_names: skills,
         evidence_type: backendEvidenceType,
         title: title.trim(),
         description: description.trim() || `Submitted ${type.toLowerCase()} demonstrating competencies in ${skills.join(', ')}.`,
@@ -108,17 +95,17 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
         evidence_url: url.trim() || undefined,
       });
 
-      // Update parent application state
+      // Update parent application state with all skills
       onAddEvidence(
         {
           title: createdEvidence.title,
           type,
           institution: createdEvidence.issuer || institution,
-          skills,
+          skills: skills,
           fileName: fileName || (url ? 'External Artifact Link' : `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pdf`),
           url: createdEvidence.evidence_url || undefined,
           score: 95,
-          aiFeedback: `Submitted for verification. Demonstrates potential competency in ${skills.join(', ')}.`,
+          aiFeedback: `Submitted for verification. Demonstrates verified capabilities in ${skills.join(', ')}.`,
         },
         createdEvidence.id
       );
@@ -133,7 +120,7 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
 
   return (
     <div className="bg-[#f7f9fb] min-h-screen text-[#191c1e] pb-24 md:pb-12 font-['Inter']">
-      {/* Custom Header for Form Page */}
+      {/* Header */}
       <header className="bg-white sticky top-0 z-40 border-b border-slate-200 flex items-center px-4 md:px-8 py-3 h-16 shadow-2xs">
         <button
           onClick={() => onNavigate('passport')}
@@ -240,64 +227,19 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
               />
             </div>
 
-            {/* Skills Demonstrated */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="skill-input">
-                Skills Demonstrated
-              </label>
-              <div 
-                className="w-full min-h-[48px] bg-white border border-slate-200 rounded-lg p-2 focus-within:border-[#00687a] focus-within:ring-2 focus-within:ring-[#00687a]/20 transition-all flex flex-wrap gap-2 items-center cursor-text"
-                onClick={() => document.getElementById('skill-input')?.focus()}
-              >
-                {skills.map((skill) => (
-                  <div
-                    key={skill}
-                    className="bg-[#f2f4f6] text-slate-800 border border-slate-200 rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-medium"
-                  >
-                    <span>{skill}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveSkill(skill);
-                      }}
-                      className="text-slate-400 hover:text-red-600 transition-colors"
-                      aria-label={`Remove skill ${skill}`}
-                    >
-                      <span className="material-symbols-outlined text-[14px]">close</span>
-                    </button>
-                  </div>
-                ))}
-
-                <input
-                  id="skill-input"
-                  type="text"
-                  value={newSkillInput}
-                  onChange={(e) => setNewSkillInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={skills.length === 0 ? "Search or type skills (press Enter)..." : "Add more skills..."}
-                  className="bg-transparent border-none outline-none text-xs text-[#191c1e] flex-1 min-w-[150px] h-8 px-1 focus:ring-0"
-                />
-              </div>
-              {errors.skills && <span className="text-xs text-red-600 font-medium">{errors.skills}</span>}
-
-              {/* Quick skill suggestions */}
-              <div className="flex flex-wrap gap-1.5 mt-1 items-center">
-                <span className="text-[11px] text-slate-400 mr-1">Suggestions:</span>
-                {(availableSkills.length > 0 ? availableSkills.map(s => s.name) : ['Python', 'FastAPI', 'React', 'TypeScript', 'SQL & PostgreSQL', 'Machine Learning', 'Cloud & Docker']).map((suggested) => (
-                  !skills.includes(suggested) && (
-                    <button
-                      key={suggested}
-                      type="button"
-                      onClick={() => handleAddSkill(suggested)}
-                      className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full transition-colors font-medium"
-                    >
-                      + {suggested}
-                    </button>
-                  )
-                ))}
-              </div>
-            </div>
+            {/* Normalized Searchable Multi-Select Skill Dropdown */}
+            <SearchableSkillSelect
+              selectedSkills={skills}
+              onChange={(updatedSkills) => {
+                setSkills(updatedSkills);
+                if (errors.skills && updatedSkills.length > 0) {
+                  setErrors({ ...errors, skills: '' });
+                }
+              }}
+              error={errors.skills}
+              label="Skills Demonstrated (Multiple Selection)"
+              placeholder="Type or search canonical skills (e.g. Python, Java, Machine Learning, React)..."
+            />
 
             {/* File/Link Upload Dropzone */}
             <div className="flex flex-col gap-1.5 mt-2">
@@ -345,7 +287,7 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
                 auto_awesome
               </span>
               <p className="text-xs text-[#23005c] leading-relaxed">
-                <strong className="font-bold text-[#6d3bd7]">Skill Passport Integrity:</strong> Submitting verified evidence ensures high-confidence internship matching. Unverified items remain pending and will not inflate verified match scores.
+                <strong className="font-bold text-[#6d3bd7]">Skill Passport Integrity:</strong> All selected skills are normalized and submitted to Neon PostgreSQL. Once verified by an administrator, all skills will automatically be indexed in your Verified Skill Passport and available to Internship & Team Builder matching.
               </p>
             </div>
 
@@ -362,7 +304,7 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-[#00687a] text-white font-bold text-xs rounded-full px-6 py-3 hover:bg-[#004e5c] transition-all shadow-sm active:scale-95 duration-150 flex items-center gap-2 disabled:opacity-70"
+                className="bg-[#00687a] text-white font-bold text-xs rounded-full px-6 py-3 hover:bg-[#004e5c] transition-all shadow-sm active:scale-95 duration-150 flex items-center gap-2 disabled:opacity-70 cursor-pointer"
               >
                 <span>{isSubmitting ? 'Submitting to Backend...' : 'Submit to Skill Passport'}</span>
                 <span className="material-symbols-outlined text-[16px]">send</span>

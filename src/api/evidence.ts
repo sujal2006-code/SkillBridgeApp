@@ -2,8 +2,10 @@ import { apiClient } from './client';
 import { ApiEvidence } from '../types';
 
 export interface CreateEvidencePayload {
-  student_id: number;
+  student_id?: number;
   skill_id?: number | null;
+  skill_ids?: number[];
+  skill_names?: string[];
   evidence_type: 'coursework' | 'project' | 'competition' | 'certificate' | 'internship' | string;
   title: string;
   description?: string | null;
@@ -14,7 +16,7 @@ export interface CreateEvidencePayload {
 
 export const evidenceApi = {
   /**
-   * Submit new evidence item for a student
+   * Submit new evidence item for a student with normalized multi-skill support
    */
   createEvidence: (payload: CreateEvidencePayload) => {
     return apiClient.post<ApiEvidence>('/api/evidence', payload);

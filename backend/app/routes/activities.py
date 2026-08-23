@@ -32,6 +32,27 @@ def list_activities(
     return query.order_by(Activity.created_at.desc()).offset(skip).limit(limit).all()
 
 
+@router.get("/unread-count", summary="Get unread notifications count for badge")
+def get_unread_activities_count(
+    student_id: Optional[int] = None,
+    auth_student_id: Optional[int] = Depends(get_optional_student_id),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Retrieve number of unread notifications for badge counter."""
+    effective_id = auth_student_id if auth_student_id is not None else student_id
+    if effective_id is None:
+        return {"unread_count": 0}
+    count = (
+        db.query(Activity)
+        .filter(
+            Activity.student_id == effective_id,
+            Activity.is_read == False,
+        )
+        .count()
+    )
+    return {"unread_count": count}
+
+
 
 @router.post("", response_model=ActivityRead, status_code=status.HTTP_201_CREATED, summary="Create an activity log entry")
 def create_activity(

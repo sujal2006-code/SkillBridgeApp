@@ -70,6 +70,7 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
         .options(
             joinedload(Student.skills).joinedload(StudentSkill.skill),
             joinedload(Student.evidence).joinedload(Evidence.skill),
+            joinedload(Student.evidence).joinedload(Evidence.skills),
         )
         .filter(
             (func.lower(Student.name) == name_clean.lower())
@@ -184,6 +185,7 @@ def get_my_profile(
         .options(
             joinedload(Student.skills).joinedload(StudentSkill.skill),
             joinedload(Student.evidence).joinedload(Evidence.skill),
+            joinedload(Student.evidence).joinedload(Evidence.skills),
         )
         .filter(Student.id == auth_student_id)
         .first()
@@ -274,6 +276,7 @@ def onboard_student(payload: StudentOnboardRequest, db: Session = Depends(get_db
         .options(
             joinedload(Student.skills).joinedload(StudentSkill.skill),
             joinedload(Student.evidence).joinedload(Evidence.skill),
+            joinedload(Student.evidence).joinedload(Evidence.skills),
         )
         .filter(
             (Student.name.ilike(name_clean)) | (Student.email.ilike(name_clean))
@@ -347,6 +350,7 @@ def get_student(
         .options(
             joinedload(Student.skills).joinedload(StudentSkill.skill),
             joinedload(Student.evidence).joinedload(Evidence.skill),
+            joinedload(Student.evidence).joinedload(Evidence.skills),
         )
         .filter(Student.id == effective_id)
         .first()

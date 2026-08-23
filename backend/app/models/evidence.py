@@ -1,7 +1,15 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.session import Base
+
+# Many-to-many association table linking an evidence item to multiple demonstrated skills
+evidence_skills = Table(
+    "evidence_skills",
+    Base.metadata,
+    Column("evidence_id", Integer, ForeignKey("evidence.id", ondelete="CASCADE"), primary_key=True),
+    Column("skill_id", Integer, ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Evidence(Base):
@@ -9,6 +17,7 @@ class Evidence(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    # Legacy primary skill_id preserved for backwards compatibility with existing rows
     skill_id = Column(Integer, ForeignKey("skills.id"), nullable=True, index=True)
     evidence_type = Column(String(50), nullable=False)  # coursework, project, competition, certificate, internship
     title = Column(String(255), nullable=False)
@@ -21,3 +30,4 @@ class Evidence(Base):
     # Relationships
     student = relationship("Student", back_populates="evidence")
     skill = relationship("Skill", back_populates="evidence")
+    skills = relationship("Skill", secondary=evidence_skills, back_populates="evidence_list")

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { ApiTeam, ApiTeamCandidateRecommendation } from '../types';
+import { ApiTeam, ApiTeamCandidateRecommendation, ApiTeamInvitation } from '../types';
 
 export interface CreateTeamPayload {
   name: string;
@@ -12,6 +12,12 @@ export interface AddTeamMemberPayload {
   student_id: number;
   role?: string;
   status?: 'invited' | 'joined' | 'declined';
+}
+
+export interface CreateTeamInvitationPayload {
+  recipient_id: number;
+  role?: string;
+  message?: string;
 }
 
 export const teamsApi = {
@@ -37,14 +43,42 @@ export const teamsApi = {
   },
 
   /**
-   * Invite/Add a candidate student to a team
+   * Invite/Add a candidate student directly to a team
    */
   addTeamMember: (teamId: number, payload: AddTeamMemberPayload) => {
     return apiClient.post<ApiTeam>(`/api/teams/${teamId}/members`, payload);
   },
 
   /**
-   * Get explainable candidate recommendations for a team based on real DB data
+   * Send a persistent team invitation
+   */
+  createTeamInvitation: (teamId: number, payload: CreateTeamInvitationPayload) => {
+    return apiClient.post<ApiTeamInvitation>(`/api/teams/${teamId}/invitations`, payload);
+  },
+
+  /**
+   * Get pending invitations for the authenticated student
+   */
+  getPendingInvitations: () => {
+    return apiClient.get<ApiTeamInvitation[]>('/api/teams/invitations/pending');
+  },
+
+  /**
+   * Accept a pending team invitation
+   */
+  acceptInvitation: (invitationId: number) => {
+    return apiClient.post<ApiTeamInvitation>(`/api/teams/invitations/${invitationId}/accept`, {});
+  },
+
+  /**
+   * Reject a pending team invitation
+   */
+  rejectInvitation: (invitationId: number) => {
+    return apiClient.post<ApiTeamInvitation>(`/api/teams/invitations/${invitationId}/reject`, {});
+  },
+
+  /**
+   * Get explainable candidate recommendations for a team based on real DB data and complementarity
    */
   getTeamCandidates: (teamId: number) => {
     return apiClient.get<ApiTeamCandidateRecommendation[]>(`/api/teams/${teamId}/candidates`);
