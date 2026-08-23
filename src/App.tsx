@@ -16,6 +16,7 @@ import {
 import {
   studentsApi,
   recommendationsApi,
+  internshipsApi,
   evidenceApi,
   teamsApi,
   activitiesApi,
@@ -319,29 +320,32 @@ export default function App() {
 
       // 2. Fetch explainable internship recommendations
       try {
-        const recData = await recommendationsApi.getRecommendationsForStudent(studentData.id);
+        const recData = await recommendationsApi.getMyRecommendations();
         if (recData && recData.recommendations) {
           processRecommendations(recData.recommendations);
         }
-      } catch {
-        // Fallback to raw internships
-        const rawInternships = await recommendationsApi.getInternships();
-        const mappedFallback: Internship[] = rawInternships.map((raw) => ({
-          id: `internship-${raw.id}`,
-          apiId: raw.id,
-          title: raw.title,
-          company: raw.company,
-          logo: LOGO_MAP[raw.company] || DEFAULT_LOGO,
-          location: raw.location,
-          type: raw.location.toLowerCase().includes('remote') ? 'Remote' : 'Hybrid',
-          employmentType: 'Internship',
-          matchPercentage: 75,
-          postedDate: 'Active',
-          verifiedSkills: raw.required_skills || [],
-          description: raw.description,
-          applied: false,
-        }));
-        setInternships(mappedFallback);
+      } catch (recErr) {
+        try {
+          const rawInternships = await internshipsApi.getInternships();
+          const mappedFallback: Internship[] = (rawInternships || []).map((raw) => ({
+            id: `internship-${raw.id}`,
+            apiId: raw.id,
+            title: raw.title,
+            company: raw.company,
+            logo: LOGO_MAP[raw.company] || DEFAULT_LOGO,
+            location: raw.location,
+            type: raw.location.toLowerCase().includes('remote') ? 'Remote' : 'Hybrid',
+            employmentType: 'Internship',
+            matchPercentage: 75,
+            postedDate: 'Active',
+            verifiedSkills: raw.required_skills || [],
+            description: raw.description,
+            applied: false,
+          }));
+          setInternships(mappedFallback);
+        } catch {
+          // Fallback to empty if not available
+        }
       }
 
       // 3. Fetch evidence verification queue (Admin queue)
