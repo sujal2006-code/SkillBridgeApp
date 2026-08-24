@@ -3,6 +3,8 @@ import { EvidenceItem, ScreenType, ApiSkill } from '../types';
 import { skillsApi, evidenceApi } from '../api';
 import { SearchableSkillSelect } from '../components/common/SearchableSkillSelect';
 
+type SimplifiedCategory = 'Project' | 'Competition' | 'Certificate' | 'Internship';
+
 interface AddEvidenceViewProps {
   studentId?: number;
   onAddEvidence: (newEvidence: Omit<EvidenceItem, 'id' | 'date' | 'verificationStatus'>, backendEvidenceId?: number) => void;
@@ -14,18 +16,42 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
   onAddEvidence,
   onNavigate,
 }) => {
-  const [type, setType] = useState<EvidenceItem['type']>('Project');
-  const [title, setTitle] = useState('');
-  const [institution, setInstitution] = useState('');
-  const [description, setDescription] = useState('');
+  // Category state
+  const [category, setCategory] = useState<SimplifiedCategory>('Project');
+
+  // Project-specific fields
+  const [projectName, setProjectName] = useState('');
+  const [projectLink, setProjectLink] = useState('');
+  const [projectDesc, setProjectDesc] = useState('');
+
+  // Competition-specific fields
+  const [competitionName, setCompetitionName] = useState('');
+  const [organization, setOrganization] = useState('');
+  const [achievement, setAchievement] = useState('');
+  const [compDesc, setCompDesc] = useState('');
+  const [compUrl, setCompUrl] = useState('');
+
+  // Certificate-specific fields
+  const [certificateName, setCertificateName] = useState('');
+  const [issuedBy, setIssuedBy] = useState('');
+  const [certificateUrl, setCertificateUrl] = useState('');
+  const [certDesc, setCertDesc] = useState('');
+
+  // Internship-specific fields
+  const [companyName, setCompanyName] = useState('');
+  const [role, setRole] = useState('');
+  const [duration, setDuration] = useState('');
+  const [internDesc, setInternDesc] = useState('');
+  const [internUrl, setInternUrl] = useState('');
+
+  // Shared fields
   const [skills, setSkills] = useState<string[]>(['Python', 'Machine Learning']);
   const [fileName, setFileName] = useState('');
-  const [url, setUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  
-  // Available skills from backend
+
+  // Available canonical skills from backend
   const [availableSkills, setAvailableSkills] = useState<ApiSkill[]>([]);
 
   useEffect(() => {
@@ -42,13 +68,32 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
     }
   };
 
+  const handleCategoryChange = (newCategory: SimplifiedCategory) => {
+    setCategory(newCategory);
+    setErrors({});
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: { [key: string]: string } = {};
 
-    if (!title.trim()) newErrors.title = 'Title is required';
-    if (!institution.trim()) newErrors.institution = 'Institution / Source is required';
-    if (skills.length === 0) newErrors.skills = 'Please select at least one skill demonstrated';
+    // Validate based on active category
+    if (category === 'Project') {
+      if (!projectName.trim()) newErrors.projectName = 'Project Name is required';
+    } else if (category === 'Competition') {
+      if (!competitionName.trim()) newErrors.competitionName = 'Competition / Hackathon Name is required';
+      if (!organization.trim()) newErrors.organization = 'Organization / Platform is required';
+    } else if (category === 'Certificate') {
+      if (!certificateName.trim()) newErrors.certificateName = 'Certificate Name is required';
+      if (!issuedBy.trim()) newErrors.issuedBy = 'Issued By is required (e.g. AWS, Coursera, Google)';
+    } else if (category === 'Internship') {
+      if (!companyName.trim()) newErrors.companyName = 'Company / Organization Name is required';
+      if (!role.trim()) newErrors.role = 'Role / Position is required';
+    }
+
+    if (skills.length === 0) {
+      newErrors.skills = 'Please select at least one skill demonstrated';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -58,16 +103,49 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
     setIsSubmitting(true);
     setSubmitError(null);
 
-    // Map evidence type to backend enum format (lowercase)
-    const backendTypeMap: { [key: string]: string } = {
-      Project: 'project',
-      Coursework: 'coursework',
-      Competition: 'competition',
-      Certificate: 'certificate',
-      'Micro-credential': 'coursework',
-      Internship: 'internship',
-    };
-    const backendEvidenceType = backendTypeMap[type] || 'project';
+    // Prepare unified mapping for backend and passport
+    let title = '';
+    let issuer = '';
+    let description = '';
+    let evidenceUrl = '';
+    let backendEvidenceType = 'project';
+    let displayType = 'Project';
+
+    if (category === 'Project') {
+      title = projectName.trim();
+      issuer = projectLink.trim() ? 'Independent Project' : 'Self-Directed';
+      description = projectDesc.trim() || `Project demonstrating competencies in ${skills.join(', ')}.`;
+      evidenceUrl = projectLink.trim();
+      backendEvidenceType = 'project';
+      displayType = 'Project';
+    } else if (category === 'Competition') {
+      title = competitionName.trim();
+      issuer = organization.trim();
+      const compDetails: string[] = [];
+      if (achievement.trim()) compDetails.push(`Achievement: ${achievement.trim()}`);
+      if (compDesc.trim()) compDetails.push(compDesc.trim());
+      description = compDetails.join('\n\n') || `Competition participation demonstrating competencies in ${skills.join(', ')}.`;
+      evidenceUrl = compUrl.trim();
+      backendEvidenceType = 'competition';
+      displayType = 'Competition';
+    } else if (category === 'Certificate') {
+      title = certificateName.trim();
+      issuer = issuedBy.trim();
+      description = certDesc.trim() || `Verified certificate issued by ${issuedBy.trim()} demonstrating ${skills.join(', ')}.`;
+      evidenceUrl = certificateUrl.trim();
+      backendEvidenceType = 'certificate';
+      displayType = 'Certificate';
+    } else if (category === 'Internship') {
+      title = `${role.trim()} at ${companyName.trim()}`;
+      issuer = companyName.trim();
+      const internDetails: string[] = [];
+      if (duration.trim()) internDetails.push(`Duration: ${duration.trim()}`);
+      if (internDesc.trim()) internDetails.push(internDesc.trim());
+      description = internDetails.join('\n\n') || `Internship experience at ${companyName.trim()} in ${role.trim()}.`;
+      evidenceUrl = internUrl.trim();
+      backendEvidenceType = 'internship';
+      displayType = 'Internship';
+    }
 
     // Map skill names to skill IDs where found in available backend skills
     const resolvedSkillIds: number[] = [];
@@ -81,29 +159,29 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
     });
 
     try {
-      // Call live backend API to persist evidence record with ALL selected skills
+      // Call live backend API to persist evidence record
       const createdEvidence = await evidenceApi.createEvidence({
         student_id: studentId,
         skill_id: resolvedSkillIds.length > 0 ? resolvedSkillIds[0] : undefined,
         skill_ids: resolvedSkillIds,
         skill_names: skills,
         evidence_type: backendEvidenceType,
-        title: title.trim(),
-        description: description.trim() || `Submitted ${type.toLowerCase()} demonstrating competencies in ${skills.join(', ')}.`,
-        issuer: institution.trim(),
+        title: title,
+        description: description,
+        issuer: issuer,
         verification_status: 'pending',
-        evidence_url: url.trim() || undefined,
+        evidence_url: evidenceUrl || undefined,
       });
 
-      // Update parent application state with all skills
+      // Update parent application state with evidence
       onAddEvidence(
         {
-          title: createdEvidence.title,
-          type,
-          institution: createdEvidence.issuer || institution,
+          title: createdEvidence.title || title,
+          type: displayType,
+          institution: createdEvidence.issuer || issuer,
           skills: skills,
-          fileName: fileName || (url ? 'External Artifact Link' : `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pdf`),
-          url: createdEvidence.evidence_url || undefined,
+          fileName: fileName || (evidenceUrl ? 'External Link / Proof' : `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pdf`),
+          url: createdEvidence.evidence_url || evidenceUrl || undefined,
           score: 95,
           aiFeedback: `Submitted for verification. Demonstrates verified capabilities in ${skills.join(', ')}.`,
         },
@@ -124,13 +202,13 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
       <header className="bg-white sticky top-0 z-40 border-b border-slate-200 flex items-center px-4 md:px-8 py-3 h-16 shadow-2xs">
         <button
           onClick={() => onNavigate('passport')}
-          className="p-2 mr-3 hover:bg-slate-100 rounded-full transition-colors text-slate-700 flex items-center justify-center"
-          aria-label="Go back"
+          className="p-2 mr-3 hover:bg-slate-100 rounded-full transition-colors text-slate-700 flex items-center justify-center cursor-pointer"
+          aria-label="Go back to Skill Passport"
         >
           <span className="material-symbols-outlined text-[22px]">arrow_back</span>
         </button>
         <h1 className="font-['Hanken_Grotesk'] text-xl sm:text-2xl font-bold text-[#191c1e]">
-          Add New Evidence Artifact
+          Add Evidence
         </h1>
       </header>
 
@@ -145,24 +223,22 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
         {/* Form Container */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-xs">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {/* Type Selection */}
+            {/* 1. Category Selection */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="evidence-type">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="evidence-category">
                 Evidence Category
               </label>
               <div className="relative">
                 <select
-                  id="evidence-type"
-                  value={type}
-                  onChange={(e) => setType(e.target.value as EvidenceItem['type'])}
-                  className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 appearance-none px-4 pr-10 transition-all outline-none"
+                  id="evidence-category"
+                  value={category}
+                  onChange={(e) => handleCategoryChange(e.target.value as SimplifiedCategory)}
+                  className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 appearance-none px-4 pr-10 transition-all outline-none font-medium cursor-pointer"
                 >
-                  <option value="Project">Project (GitHub, Capstone, Deployment)</option>
-                  <option value="Coursework">Coursework (University Syllabus, Lab)</option>
-                  <option value="Competition">Competition (Hackathon, ICPC, Kaggle)</option>
-                  <option value="Certificate">Certificate (Cloud, Industry Vendor)</option>
-                  <option value="Micro-credential">Micro-credential / Specialization</option>
-                  <option value="Internship">Prior Internship / Industry Experience</option>
+                  <option value="Project">Project</option>
+                  <option value="Competition">Competition</option>
+                  <option value="Certificate">Certificate</option>
+                  <option value="Internship">Internship / Industry Experience</option>
                 </select>
                 <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[20px]">
                   expand_more
@@ -170,64 +246,324 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
               </div>
             </div>
 
-            {/* Title Input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="evidence-title">
-                Artifact Title
-              </label>
-              <input
-                id="evidence-title"
-                type="text"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  if (errors.title) setErrors({ ...errors, title: '' });
-                }}
-                placeholder="e.g. Distributed Database Engine Implementation"
-                className={`w-full h-12 bg-white border ${
-                  errors.title ? 'border-red-500' : 'border-slate-200'
-                } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
-              />
-              {errors.title && <span className="text-xs text-red-600 font-medium">{errors.title}</span>}
-            </div>
+            {/* 2. Dynamic Fields: PROJECT */}
+            {category === 'Project' && (
+              <>
+                {/* Project Name */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="project-name">
+                    Project Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="project-name"
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => {
+                      setProjectName(e.target.value);
+                      if (errors.projectName) setErrors({ ...errors, projectName: '' });
+                    }}
+                    placeholder="e.g. Real-Time Collaborative Code Editor"
+                    className={`w-full h-12 bg-white border ${
+                      errors.projectName ? 'border-red-500' : 'border-slate-200'
+                    } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
+                  />
+                  {errors.projectName && <span className="text-xs text-red-600 font-medium">{errors.projectName}</span>}
+                </div>
 
-            {/* Institution/Source Input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="evidence-institution">
-                Institution / Source / Issuer
-              </label>
-              <input
-                id="evidence-institution"
-                type="text"
-                value={institution}
-                onChange={(e) => {
-                  setInstitution(e.target.value);
-                  if (errors.institution) setErrors({ ...errors, institution: '' });
-                }}
-                placeholder="e.g. Stanford University Dept of CS, Amazon Web Services"
-                className={`w-full h-12 bg-white border ${
-                  errors.institution ? 'border-red-500' : 'border-slate-200'
-                } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
-              />
-              {errors.institution && <span className="text-xs text-red-600 font-medium">{errors.institution}</span>}
-            </div>
+                {/* Project Link */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="project-link">
+                    Project Link (GitHub / Live Demo)
+                  </label>
+                  <input
+                    id="project-link"
+                    type="url"
+                    value={projectLink}
+                    onChange={(e) => setProjectLink(e.target.value)}
+                    placeholder="e.g. https://github.com/username/project or live demo URL"
+                    className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
 
-            {/* Description Input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="evidence-desc">
-                Summary & Technical Scope (Optional)
-              </label>
-              <textarea
-                id="evidence-desc"
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe key outcomes, architectural decisions, and technologies used..."
-                className="w-full bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg p-3 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
-              />
-            </div>
+                {/* Project Description */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="project-desc">
+                    Project Description / Technical Details <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <textarea
+                    id="project-desc"
+                    rows={3}
+                    value={projectDesc}
+                    onChange={(e) => setProjectDesc(e.target.value)}
+                    placeholder="Describe key features, architectural choices, and technologies used..."
+                    className="w-full bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg p-3 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+              </>
+            )}
 
-            {/* Normalized Searchable Multi-Select Skill Dropdown */}
+            {/* 3. Dynamic Fields: COMPETITION */}
+            {category === 'Competition' && (
+              <>
+                {/* Competition / Hackathon Name */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="comp-name">
+                    Competition / Hackathon Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="comp-name"
+                    type="text"
+                    value={competitionName}
+                    onChange={(e) => {
+                      setCompetitionName(e.target.value);
+                      if (errors.competitionName) setErrors({ ...errors, competitionName: '' });
+                    }}
+                    placeholder="e.g. Smart India Hackathon 2025, Kaggle Titanic ML"
+                    className={`w-full h-12 bg-white border ${
+                      errors.competitionName ? 'border-red-500' : 'border-slate-200'
+                    } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
+                  />
+                  {errors.competitionName && <span className="text-xs text-red-600 font-medium">{errors.competitionName}</span>}
+                </div>
+
+                {/* Organization / Platform */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="comp-org">
+                    Organization / Platform <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="comp-org"
+                    type="text"
+                    value={organization}
+                    onChange={(e) => {
+                      setOrganization(e.target.value);
+                      if (errors.organization) setErrors({ ...errors, organization: '' });
+                    }}
+                    placeholder="e.g. Devpost, Kaggle, ACM, IIT Bombay"
+                    className={`w-full h-12 bg-white border ${
+                      errors.organization ? 'border-red-500' : 'border-slate-200'
+                    } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
+                  />
+                  {errors.organization && <span className="text-xs text-red-600 font-medium">{errors.organization}</span>}
+                </div>
+
+                {/* Result / Achievement */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="comp-result">
+                    Result / Achievement <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    id="comp-result"
+                    type="text"
+                    value={achievement}
+                    onChange={(e) => setAchievement(e.target.value)}
+                    placeholder="e.g. Winner / 1st Place, Top 10 Finalist, Participant"
+                    className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+
+                {/* Description / Details */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="comp-desc">
+                    Description / Details <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <textarea
+                    id="comp-desc"
+                    rows={3}
+                    value={compDesc}
+                    onChange={(e) => setCompDesc(e.target.value)}
+                    placeholder="Briefly describe the challenge statement, team solution, or approach..."
+                    className="w-full bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg p-3 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+
+                {/* Proof / Submission Link */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="comp-url">
+                    Submission / Leaderboard Link <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    id="comp-url"
+                    type="url"
+                    value={compUrl}
+                    onChange={(e) => setCompUrl(e.target.value)}
+                    placeholder="e.g. https://devpost.com/software/my-project or leaderboard URL"
+                    className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 4. Dynamic Fields: CERTIFICATE */}
+            {category === 'Certificate' && (
+              <>
+                {/* Certificate Name */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="cert-name">
+                    Certificate Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="cert-name"
+                    type="text"
+                    value={certificateName}
+                    onChange={(e) => {
+                      setCertificateName(e.target.value);
+                      if (errors.certificateName) setErrors({ ...errors, certificateName: '' });
+                    }}
+                    placeholder="e.g. AWS Certified Solutions Architect, Deep Learning Specialization"
+                    className={`w-full h-12 bg-white border ${
+                      errors.certificateName ? 'border-red-500' : 'border-slate-200'
+                    } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
+                  />
+                  {errors.certificateName && <span className="text-xs text-red-600 font-medium">{errors.certificateName}</span>}
+                </div>
+
+                {/* Issued By */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="cert-issuer">
+                    Issued By <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="cert-issuer"
+                    type="text"
+                    value={issuedBy}
+                    onChange={(e) => {
+                      setIssuedBy(e.target.value);
+                      if (errors.issuedBy) setErrors({ ...errors, issuedBy: '' });
+                    }}
+                    placeholder="e.g. Amazon Web Services (AWS), Google Cloud, Coursera, IBM"
+                    className={`w-full h-12 bg-white border ${
+                      errors.issuedBy ? 'border-red-500' : 'border-slate-200'
+                    } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
+                  />
+                  {errors.issuedBy && <span className="text-xs text-red-600 font-medium">{errors.issuedBy}</span>}
+                </div>
+
+                {/* Certificate Link / Verification Link */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="cert-url">
+                    Certificate Link / Verification Link <span className="text-slate-400 font-normal lowercase">(if available)</span>
+                  </label>
+                  <input
+                    id="cert-url"
+                    type="url"
+                    value={certificateUrl}
+                    onChange={(e) => setCertificateUrl(e.target.value)}
+                    placeholder="e.g. https://coursera.org/verify/... or Credly badge link"
+                    className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+
+                {/* Certificate Description */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="cert-desc">
+                    Description <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <textarea
+                    id="cert-desc"
+                    rows={3}
+                    value={certDesc}
+                    onChange={(e) => setCertDesc(e.target.value)}
+                    placeholder="Describe topics mastered, coursework completed, or specializations..."
+                    className="w-full bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg p-3 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 5. Dynamic Fields: INTERNSHIP / INDUSTRY EXPERIENCE */}
+            {category === 'Internship' && (
+              <>
+                {/* Company / Organization Name */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="intern-company">
+                    Company / Organization Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="intern-company"
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => {
+                      setCompanyName(e.target.value);
+                      if (errors.companyName) setErrors({ ...errors, companyName: '' });
+                    }}
+                    placeholder="e.g. Microsoft, Razorpay, Tech Startup"
+                    className={`w-full h-12 bg-white border ${
+                      errors.companyName ? 'border-red-500' : 'border-slate-200'
+                    } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
+                  />
+                  {errors.companyName && <span className="text-xs text-red-600 font-medium">{errors.companyName}</span>}
+                </div>
+
+                {/* Role / Position */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="intern-role">
+                    Role / Position <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="intern-role"
+                    type="text"
+                    value={role}
+                    onChange={(e) => {
+                      setRole(e.target.value);
+                      if (errors.role) setErrors({ ...errors, role: '' });
+                    }}
+                    placeholder="e.g. Full Stack Developer Intern, Data Science Intern"
+                    className={`w-full h-12 bg-white border ${
+                      errors.role ? 'border-red-500' : 'border-slate-200'
+                    } text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none`}
+                  />
+                  {errors.role && <span className="text-xs text-red-600 font-medium">{errors.role}</span>}
+                </div>
+
+                {/* Duration */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="intern-duration">
+                    Duration <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    id="intern-duration"
+                    type="text"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    placeholder="e.g. 3 Months (June 2024 - Aug 2024)"
+                    className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+
+                {/* Description / Work Performed */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="intern-desc">
+                    Description / Work Performed <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <textarea
+                    id="intern-desc"
+                    rows={3}
+                    value={internDesc}
+                    onChange={(e) => setInternDesc(e.target.value)}
+                    placeholder="Describe key responsibilities, features delivered, and technical tools used..."
+                    className="w-full bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg p-3 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+
+                {/* Verification / Reference Link */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="intern-link">
+                    Company / Reference Link <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    id="intern-link"
+                    type="url"
+                    value={internUrl}
+                    onChange={(e) => setInternUrl(e.target.value)}
+                    placeholder="e.g. https://company.com or recommendation / letter URL"
+                    className="w-full h-12 bg-white border border-slate-200 text-[#191c1e] text-sm rounded-lg px-4 focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all outline-none"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 6. Normalized Searchable Multi-Select Skill Dropdown */}
             <SearchableSkillSelect
               selectedSkills={skills}
               onChange={(updatedSkills) => {
@@ -238,13 +574,16 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
               }}
               error={errors.skills}
               label="Skills Demonstrated (Multiple Selection)"
-              placeholder="Type or search canonical skills (e.g. Python, Java, Machine Learning, React)..."
+              placeholder="Type or search skills (e.g. Python, Java, Machine Learning, React)..."
             />
 
-            {/* File/Link Upload Dropzone */}
+            {/* 7. File Upload Dropzone */}
             <div className="flex flex-col gap-1.5 mt-2">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Upload Evidence Artifact or Provide URL
+                {category === 'Project' && 'Upload Project File or Architecture Diagram (Optional)'}
+                {category === 'Competition' && 'Upload Certificate or Proof of Rank (Optional)'}
+                {category === 'Certificate' && 'Upload Certificate Document (PDF / Image)'}
+                {category === 'Internship' && 'Upload Experience Letter or Certificate (Optional)'}
               </label>
 
               <label 
@@ -255,10 +594,10 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
                   <span className="material-symbols-outlined text-[#00687a] text-[26px]">upload_file</span>
                 </div>
                 <p className="text-xs font-bold text-slate-800 mb-0.5">
-                  {fileName ? `Selected: ${fileName}` : 'Click to select document or project archive'}
+                  {fileName ? `Selected: ${fileName}` : 'Click to select document or proof file'}
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  PDF, JPG, PNG or ZIP repository (Max 10MB)
+                  PDF, JPG, PNG or ZIP file (Max 10MB)
                 </p>
                 <input
                   id="file-upload"
@@ -267,18 +606,6 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
                   className="hidden"
                 />
               </label>
-
-              {/* URL input */}
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs text-slate-400 shrink-0 font-medium">or Artifact URL:</span>
-                <input
-                  type="url"
-                  placeholder="https://github.com/your-username/project-repo or certificate URL"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="flex-1 h-10 bg-white border border-slate-200 text-xs px-3 rounded-lg outline-none focus:border-[#00687a]"
-                />
-              </div>
             </div>
 
             {/* AI Verification Notice */}
@@ -296,7 +623,7 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('passport')}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-4 py-2"
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-4 py-2 cursor-pointer transition-colors"
               >
                 Cancel
               </button>
@@ -316,3 +643,4 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
     </div>
   );
 };
+
