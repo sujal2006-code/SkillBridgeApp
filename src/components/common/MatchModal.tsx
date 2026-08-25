@@ -161,7 +161,7 @@ export const MatchModal: React.FC<MatchModalProps> = ({
           <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl">
             <span className="text-xs font-bold uppercase text-amber-900 tracking-wider block mb-1.5 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px] text-amber-600">warning</span>
-              {isInternship ? 'Missing Skills (Recommended to Develop Next)' : 'Remaining Team Skill Gaps'}
+              {isInternship ? 'Missing Skills (Recommended to Develop Next)' : 'Missing Team Requirements'}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {(internshipItem?.missingSkills || candidateItem?.missingSkills || []).map((skill, idx) => (
@@ -169,7 +169,27 @@ export const MatchModal: React.FC<MatchModalProps> = ({
                   key={idx}
                   className="px-2.5 py-1 bg-white text-amber-900 text-xs font-semibold rounded-md border border-amber-300 flex items-center gap-1"
                 >
-                  <span className="material-symbols-outlined text-[13px] text-amber-600">add_circle</span>
+                  <span className="material-symbols-outlined text-[13px] text-amber-600">close</span>
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Complementary Domain Breadth Skills */}
+        {candidateItem?.complementarySkills && candidateItem.complementarySkills.length > 0 && (
+          <div>
+            <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider block mb-2">
+              Complementary Domain Breadth Skills
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {candidateItem.complementarySkills.map((skill, idx) => (
+                <span 
+                  key={idx}
+                  className="px-2.5 py-1 bg-cyan-50 text-[#004e5c] text-xs font-semibold rounded-md border border-cyan-200 flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[13px] text-[#00687a]">extension</span>
                   {skill}
                 </span>
               ))}

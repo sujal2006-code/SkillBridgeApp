@@ -246,7 +246,7 @@ export const TeamBuilderView: React.FC<TeamBuilderViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Contributed & Complementary Skills */}
+                    {/* Contributed, Missing & Complementary Skills */}
                     <div className="flex flex-col gap-2.5">
                       {candidate.skillsContributed && candidate.skillsContributed.length > 0 && (
                         <div>
@@ -260,6 +260,25 @@ export const TeamBuilderView: React.FC<TeamBuilderViewProps> = ({
                                 className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"
                               >
                                 <span className="material-symbols-outlined text-[14px] text-emerald-600">check_circle</span>
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {candidate.missingSkills && candidate.missingSkills.length > 0 && (
+                        <div>
+                          <span className="text-[11px] font-bold uppercase text-amber-800/80 mb-1.5 block tracking-wider">
+                            • Missing Skills
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {candidate.missingSkills.map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="bg-amber-50/80 text-amber-900 border border-amber-200/80 px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1"
+                              >
+                                <span className="material-symbols-outlined text-[14px] text-amber-600">close</span>
                                 {skill}
                               </span>
                             ))}
