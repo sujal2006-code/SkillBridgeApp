@@ -122,8 +122,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
   // Demo Profile Fast-Fill Helper for Testing
   const handleQuickFillDemo = () => {
-    setName('Alex Rivera');
-    setPassword('stanford2026');
+    setName('Aarav Sharma');
+    setPassword('skillbridge2026');
     setMode('login');
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -516,7 +516,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1 cursor-pointer transition-colors"
             >
               <span className="material-symbols-outlined text-[14px]">bolt</span>
-              <span>Use Demo Profile (Alex Rivera)</span>
+              <span>Use Demo Profile (Aarav Sharma)</span>
             </button>
           </div>
         )}

@@ -69,7 +69,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 setName(e.target.value);
                 if (error) setError(null);
               }}
-              placeholder="e.g. Sujal or Alex Rivera"
+              placeholder="e.g. Sujal or Aarav Sharma"
               disabled={isLoading}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00687a] focus:bg-white transition-all"
               autoFocus

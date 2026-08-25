@@ -244,6 +244,11 @@ class TeamMatchingService:
 
         recommendations = []
         for candidate in candidates:
+            # Only include candidates who have verified skills in their passport
+            has_verified_skills = any(ss.verification_status == "verified" for ss in candidate.skills)
+            if not has_verified_skills:
+                continue
+
             rec = cls.compute_candidate_match_for_team(
                 candidate=candidate,
                 team_requirements=team.required_skills,
@@ -251,6 +256,6 @@ class TeamMatchingService:
             )
             recommendations.append(rec)
 
-        # Sort by match_score descending, then candidate_name
-        recommendations.sort(key=lambda x: (-x.match_score, x.candidate_name))
+        # Sort by match_score descending, then number of matched contributions, then candidate_name
+        recommendations.sort(key=lambda x: (-x.match_score, -len(x.matched_skills), x.candidate_name))
         return recommendations

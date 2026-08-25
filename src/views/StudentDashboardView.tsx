@@ -20,7 +20,7 @@ interface StudentDashboardProps {
 }
 
 export const StudentDashboardView: React.FC<StudentDashboardProps> = ({
-  studentName = 'Alex Rivera',
+  studentName = 'Aarav Sharma',
   internships,
   activities,
   verifiedSkillsCount,

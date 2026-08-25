@@ -1,21 +1,27 @@
+import os
+import sys
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import inspect, text
-from app.database.session import Base, engine
+
+# Add backend directory to sys.path
+backend_dir = os.path.abspath(os.path.dirname(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
+from app.database.session import SessionLocal, engine
 from app.models.student import Student
 from app.models.skill import Skill, StudentSkill
 from app.models.evidence import Evidence, evidence_skills
 from app.models.internship import Internship, InternshipSkill
-from app.models.match import Match
 from app.models.team import Team, TeamMember, TeamSkillRequirement, TeamInvitation
 from app.models.activity import Activity
-from app.models.otp import OTP
+from app.models.match import Match
 from app.core.security import hash_password
+from app.database.init_db import init_db
 
+COMMON_DEMO_PASSWORD = "skillbridge2026"
+COMMON_PASSWORD_HASH = hash_password(COMMON_DEMO_PASSWORD)
 
-DEMO_COMMON_PASSWORD_HASH = hash_password("skillbridge2026")
-
-DEMO_INDIAN_STUDENTS_DATA = [
+DEMO_STUDENTS_DATA = [
     {
         "name": "Aarav Sharma",
         "email": "aarav.sharma@skillbridge.edu",
@@ -693,481 +699,257 @@ DEMO_INDIAN_STUDENTS_DATA = [
     },
 ]
 
-
-CANONICAL_SKILLS_CATALOGUE = [
-    # Programming
-    {"name": "Python", "category": "Programming Languages", "description": "High-level programming language for AI, data science, and web development."},
-    {"name": "Java", "category": "Programming Languages", "description": "Object-oriented, class-based programming language for enterprise and Android development."},
-    {"name": "C", "category": "Programming Languages", "description": "Procedural systems programming language with low-level memory manipulation."},
-    {"name": "C++", "category": "Programming Languages", "description": "High-performance object-oriented programming for systems, games, and high-throughput systems."},
-    {"name": "C#", "category": "Programming Languages", "description": "Modern type-safe object-oriented language for .NET, enterprise, and game development."},
-    {"name": "JavaScript", "category": "Programming Languages", "description": "High-level scripting language powering dynamic behavior on the web."},
-    {"name": "TypeScript", "category": "Programming Languages", "description": "Strict syntactical superset of JavaScript adding static type definitions."},
-    {"name": "Go", "category": "Programming Languages", "description": "Statically typed, compiled programming language designed at Google for concurrent systems."},
-    {"name": "Rust", "category": "Programming Languages", "description": "Safe, concurrent, high-performance systems language with memory safety guarantees."},
-    {"name": "Kotlin", "category": "Programming Languages", "description": "Modern cross-platform statically typed language for JVM and Android."},
-    {"name": "Swift", "category": "Programming Languages", "description": "Powerful, intuitive language for iOS, macOS, watchOS, and tvOS development."},
-    {"name": "PHP", "category": "Programming Languages", "description": "Server-side scripting language designed for web development."},
-    
-    # Web Development
-    {"name": "HTML", "category": "Frontend Development", "description": "Standard markup language for documents designed to be displayed in a web browser."},
-    {"name": "CSS", "category": "Frontend Development", "description": "Style sheet language used for describing the presentation of structured documents."},
-    {"name": "React", "category": "Frontend Development", "description": "Component-based declarative JavaScript UI library for building reactive interfaces."},
-    {"name": "Next.js", "category": "Frontend Development", "description": "Production React framework with hybrid static & server rendering and route optimization."},
-    {"name": "Node.js", "category": "Web Development", "description": "Asynchronous event-driven JavaScript runtime environment for backend services."},
-    {"name": "Express.js", "category": "Web Development", "description": "Minimal and flexible Node.js web application framework for robust APIs."},
-    {"name": "Angular", "category": "Frontend Development", "description": "Component-based framework for building scalable web applications with TypeScript."},
-    {"name": "Vue.js", "category": "Frontend Development", "description": "Progressive JavaScript framework for building user interfaces and single-page apps."},
-    {"name": "Tailwind CSS", "category": "Frontend Development", "description": "Utility-first CSS framework for rapid modern UI development."},
-    {"name": "Bootstrap", "category": "Frontend Development", "description": "Popular responsive CSS framework for mobile-first front-end web design."},
-
-    # Backend / API
-    {"name": "FastAPI", "category": "Backend Development", "description": "High-performance Python web framework for building modern REST APIs."},
-    {"name": "Flask", "category": "Backend Development", "description": "Lightweight WSGI Python web application framework for microservices."},
-    {"name": "Django", "category": "Backend Development", "description": "High-level Python web framework with batteries-included ORM and admin tools."},
-    {"name": "Spring Boot", "category": "Backend Development", "description": "Enterprise Java framework for creating stand-alone, production-grade Spring applications."},
-    {"name": "REST API", "category": "Backend Development", "description": "Architectural style for designing networked scalable web API services."},
-    {"name": "RESTful API Design", "category": "Backend Development", "description": "Best practices for designing, documenting, and securing REST APIs."},
-    {"name": "GraphQL", "category": "Backend Development", "description": "Query language for APIs and runtime for executing queries with existing data."},
-    {"name": "Microservices", "category": "Backend Development", "description": "Architectural design pattern structuring an application as a collection of loose services."},
-
-    # Databases
-    {"name": "SQL", "category": "Databases", "description": "Standard declarative query language for relational database management systems."},
-    {"name": "SQL & PostgreSQL", "category": "Databases", "description": "Relational database modeling, indexing, query optimization, and transaction management."},
-    {"name": "PostgreSQL", "category": "Databases", "description": "Powerful open-source object-relational database system with advanced indexing."},
-    {"name": "MySQL", "category": "Databases", "description": "Widely deployed open-source relational database management system."},
-    {"name": "SQLite", "category": "Databases", "description": "Self-contained, serverless, zero-configuration embedded SQL database engine."},
-    {"name": "MongoDB", "category": "Databases", "description": "Document-oriented NoSQL database system using JSON-like documents with dynamic schemas."},
-    {"name": "Redis", "category": "Databases", "description": "In-memory data structure store used as a distributed database, cache, and message broker."},
-    {"name": "Database Design", "category": "Databases", "description": "Entity-relationship modeling, normalization, indexing strategies, and schema migrations."},
-
-    # AI / Machine Learning
-    {"name": "Machine Learning", "category": "AI / Data Science", "description": "Applied ML, feature engineering, neural networks, and model evaluation."},
-    {"name": "Artificial Intelligence", "category": "AI / Data Science", "description": "General AI principles, knowledge representation, heuristics, and intelligent agents."},
-    {"name": "Deep Learning", "category": "AI / Data Science", "description": "Multi-layer neural network architectures, backpropagation, CNNs, and RNNs."},
-    {"name": "Natural Language Processing", "category": "AI / Data Science", "description": "Computational linguistics, text tokenization, embeddings, and sentiment analysis."},
-    {"name": "NLP", "category": "AI / Data Science", "description": "Natural Language Processing algorithms, transformers, and sequence modeling."},
-    {"name": "Computer Vision", "category": "AI / Data Science", "description": "Image processing, object detection, segmentation, and convolutional neural networks."},
-    {"name": "Generative AI", "category": "AI / Data Science", "description": "Foundation models, diffusion architectures, LLM prompting, and RAG architectures."},
-    {"name": "Large Language Models", "category": "AI / Data Science", "description": "Transformer-based language models, fine-tuning, context window management, and inference."},
-    {"name": "Data Science", "category": "AI / Data Science", "description": "Interdisciplinary field extracting knowledge from structured and unstructured data."},
-    {"name": "TensorFlow", "category": "AI / Data Science", "description": "End-to-end open source platform for machine learning and deep neural networks."},
-    {"name": "PyTorch", "category": "AI / Data Science", "description": "Optimized tensor library for deep learning using GPUs and CPUs with dynamic autograd."},
-    {"name": "Scikit-learn", "category": "AI / Data Science", "description": "Simple and efficient tools for predictive data analysis and machine learning in Python."},
-    {"name": "Keras", "category": "AI / Data Science", "description": "High-level neural networks API running on top of TensorFlow for fast prototyping."},
-
-    # Data Analysis & Mathematics
-    {"name": "NumPy", "category": "Data Analysis", "description": "Core library for scientific computing with Python, offering high-performance arrays."},
-    {"name": "Pandas", "category": "Data Analysis", "description": "Fast, flexible data manipulation and analysis tool built on top of Python."},
-    {"name": "Matplotlib", "category": "Data Analysis", "description": "Comprehensive library for creating static, animated, and interactive visualizations."},
-    {"name": "Seaborn", "category": "Data Analysis", "description": "Statistical data visualization library based on matplotlib with attractive default styles."},
-    {"name": "Data Visualization", "category": "Data Analysis", "description": "Graphical representation of information and data to communicate complex trends."},
-    {"name": "Data Analysis", "category": "Data Analysis", "description": "Process of inspecting, cleansing, transforming, and modeling data to discover useful insights."},
-    {"name": "Statistics", "category": "Data Analysis", "description": "Probability distributions, hypothesis testing, regression analysis, and statistical inference."},
-
-    # Cloud & DevOps
-    {"name": "Git", "category": "DevOps / Infrastructure", "description": "Distributed version control system for tracking changes in source code."},
-    {"name": "GitHub", "category": "DevOps / Infrastructure", "description": "Cloud hosting platform for Git repositories with CI/CD GitHub Actions integration."},
-    {"name": "Docker", "category": "DevOps / Infrastructure", "description": "OS-level virtualization delivering software in packages called containers."},
-    {"name": "Cloud & Docker", "category": "DevOps / Infrastructure", "description": "Containerization, cloud deployments, and CI/CD pipelines."},
-    {"name": "Kubernetes", "category": "DevOps / Infrastructure", "description": "Automated deployment, scaling, and management of containerized applications."},
-    {"name": "AWS", "category": "DevOps / Infrastructure", "description": "Amazon Web Services cloud computing platform and distributed services."},
-    {"name": "Azure", "category": "DevOps / Infrastructure", "description": "Microsoft Azure cloud services for building, testing, deploying, and managing applications."},
-    {"name": "Google Cloud", "category": "DevOps / Infrastructure", "description": "Suite of cloud computing services that runs on Google infrastructure."},
-    {"name": "CI/CD", "category": "DevOps / Infrastructure", "description": "Continuous Integration and Continuous Delivery automated build, test, and release pipelines."},
-
-    # Computer Science Fundamentals
-    {"name": "DSA", "category": "Computer Science", "description": "Data Structures and Algorithms analysis, asymptotic complexity, and memory management."},
-    {"name": "Algorithms", "category": "Computer Science", "description": "Design and analysis of efficient algorithms (graph search, dynamic programming, divide & conquer)."},
-    {"name": "Object-Oriented Programming", "category": "Computer Science", "description": "Programming paradigm based on concepts of objects, encapsulation, polymorphism, and inheritance."},
-    {"name": "OOP", "category": "Computer Science", "description": "Object-Oriented Programming design principles (SOLID, design patterns, reusability)."},
-    {"name": "System Design", "category": "Computer Science", "description": "Architecture of scalable distributed systems, caching, load balancing, and partitioning."},
-    {"name": "Linux", "category": "Computer Science", "description": "Unix-like open source operating system, shell scripting, process management, and networking."},
+# Old placeholder demo accounts to cleanly remove from the active candidate pool
+OLD_PLACEHOLDER_NAMES = [
+    "alex rivera",
+    "sarah chen",
+    "marcus vance",
+    "marcus young",
+    "elena rostova",
+    "priyansh sharma",
+    "abc",
+    "abe",
 ]
 
 
-EXPANDED_INTERNSHIPS_DATA = [
-    # AI / ML
-    {
-        "title": "Machine Learning Intern",
-        "company": "NeuroTech Innovations",
-        "location": "Remote / San Francisco, CA",
-        "description": "Join our core ML engineering team to build, train, and deploy predictive models, feature transformation pipelines, and evaluation harnesses.",
-        "required_skills": ["Python", "Machine Learning", "PyTorch"],
-        "preferred_skills": ["Scikit-learn", "NumPy", "Pandas", "Docker"],
-    },
-    {
-        "title": "AI Engineer Intern",
-        "company": "Synthetix AI Labs",
-        "location": "San Francisco, CA (Hybrid)",
-        "description": "Develop generative AI workflows, agentic reasoning pipelines, and LLM-assisted code generation tools using state-of-the-art architectures.",
-        "required_skills": ["Python", "Generative AI", "Large Language Models"],
-        "preferred_skills": ["FastAPI", "Docker", "PyTorch"],
-    },
-    {
-        "title": "Data Science Intern",
-        "company": "Apex Data Labs",
-        "location": "Boston, MA (Hybrid)",
-        "description": "Extract actionable predictive insights from high-velocity telemetry data using statistical modeling, Pandas, and machine learning pipelines.",
-        "required_skills": ["Python", "Data Science", "Pandas", "SQL"],
-        "preferred_skills": ["NumPy", "Matplotlib", "Scikit-learn"],
-    },
-    {
-        "title": "NLP Intern",
-        "company": "Linguistix Cognitive AI",
-        "location": "Remote / New York, NY",
-        "description": "Research and construct multi-lingual text extraction, fine-tuned transformer tokenizers, and sentiment classification systems.",
-        "required_skills": ["Python", "NLP", "Machine Learning"],
-        "preferred_skills": ["PyTorch", "Large Language Models", "FastAPI"],
-    },
-    {
-        "title": "Computer Vision Intern",
-        "company": "Visionary Robotics",
-        "location": "Pittsburgh, PA",
-        "description": "Implement real-time visual perception, semantic segmentation, and object detection for autonomous robotic systems.",
-        "required_skills": ["Python", "Computer Vision", "Deep Learning"],
-        "preferred_skills": ["PyTorch", "C++", "Docker"],
-    },
-    {
-        "title": "Generative AI Intern",
-        "company": "Creative Intelligence Labs",
-        "location": "Seattle, WA (Remote)",
-        "description": "Build high-throughput diffusion and LLM retrieval-augmented generation (RAG) microservices for creative applications.",
-        "required_skills": ["Python", "Generative AI", "FastAPI"],
-        "preferred_skills": ["Large Language Models", "PostgreSQL", "Docker"],
-    },
+def seed_demo_accounts():
+    db = SessionLocal()
+    try:
+        print("[1/5] Initializing tables and canonical skills catalog...")
+        init_db(db)
 
-    # Software Engineering
-    {
-        "title": "Backend Engineering Intern",
-        "company": "CloudSphere Dynamics",
-        "location": "Austin, TX (Remote)",
-        "description": "Engineer high-concurrency microservices, robust REST APIs, and database persistence layers using modern asynchronous frameworks.",
-        "required_skills": ["Python", "FastAPI", "SQL & PostgreSQL"],
-        "preferred_skills": ["Docker", "Redis", "RESTful API Design"],
-    },
-    {
-        "title": "Full-Stack Developer Intern",
-        "company": "HyperScale Digital",
-        "location": "New York, NY (Hybrid)",
-        "description": "Help develop user-facing web applications, responsive component libraries, and end-to-end connected API services.",
-        "required_skills": ["React", "TypeScript", "Node.js"],
-        "preferred_skills": ["FastAPI", "SQL", "Tailwind CSS"],
-    },
-    {
-        "title": "Frontend Developer Intern",
-        "company": "PixelCraft Studio",
-        "location": "Remote / Los Angeles, CA",
-        "description": "Craft responsive, accessible, pixel-perfect user interfaces with React, Tailwind CSS, and modern interactive web technologies.",
-        "required_skills": ["React", "JavaScript", "HTML", "CSS"],
-        "preferred_skills": ["TypeScript", "Next.js", "Tailwind CSS"],
-    },
-    {
-        "title": "Software Engineering Intern",
-        "company": "Vanguard Systems",
-        "location": "Chicago, IL",
-        "description": "Work across core systems engineering, algorithm optimization, and automated testing pipelines for mission-critical services.",
-        "required_skills": ["Python", "DSA", "Git"],
-        "preferred_skills": ["C++", "Linux", "OOP"],
-    },
-    {
-        "title": "Java Developer Intern",
-        "company": "Enterprise Global FinTech",
-        "location": "New York, NY",
-        "description": "Develop and maintain robust enterprise banking microservices, transaction pipelines, and Spring Boot REST controllers.",
-        "required_skills": ["Java", "Spring Boot", "SQL"],
-        "preferred_skills": ["OOP", "DSA", "Docker"],
-    },
-    {
-        "title": "Python Developer Intern",
-        "company": "AutomateIQ",
-        "location": "Remote / Denver, CO",
-        "description": "Create automated scraping, data orchestration, and backend microservice pipelines using asynchronous Python.",
-        "required_skills": ["Python", "FastAPI", "Git"],
-        "preferred_skills": ["SQL", "Docker", "REST API"],
-    },
+        # 1. Clean up old placeholder demo students (preserving real user accounts like SujalSahu, Somadutta Sahu, Anshuman Khuntia)
+        print("\n[2/5] Cleaning up old placeholder demo candidate accounts...")
+        existing_students = db.query(Student).all()
+        for st in existing_students:
+            st_name_lower = st.name.strip().lower()
+            st_email_lower = st.email.strip().lower()
+            if (
+                any(old_name in st_name_lower for old_name in OLD_PLACEHOLDER_NAMES)
+                or "@stanford.edu" in st_email_lower
+                or "@berkeley.edu" in st_email_lower
+                or "@cmu.edu" in st_email_lower
+                or "@gatech.edu" in st_email_lower
+                or "@illinois.edu" in st_email_lower
+            ):
+                print(f" -> Removing old placeholder student: ID {st.id}, '{st.name}' ({st.email})")
+                # Remove associated team memberships, activities, matches, evidence, skills
+                db.query(Activity).filter(Activity.student_id == st.id).delete()
+                db.query(Match).filter(Match.student_id == st.id).delete()
+                db.query(TeamInvitation).filter((TeamInvitation.sender_id == st.id) | (TeamInvitation.recipient_id == st.id)).delete()
+                db.query(TeamMember).filter(TeamMember.student_id == st.id).delete()
+                db.query(Team).filter(Team.creator_id == st.id).delete()
+                # Delete evidence & skills handled via cascade or explicit delete
+                db.delete(st)
 
-    # Data Engineering & Analytics
-    {
-        "title": "Data Analyst Intern",
-        "company": "Matrix Global Insights",
-        "location": "Remote / Chicago, IL",
-        "description": "Analyze complex business metrics, design executive KPI dashboards, and perform exploratory data analysis with SQL and Python.",
-        "required_skills": ["SQL", "Python", "Data Analysis"],
-        "preferred_skills": ["Pandas", "Data Visualization", "Statistics"],
-    },
-    {
-        "title": "Data Engineering Intern",
-        "company": "Pipeline Dynamics",
-        "location": "San Jose, CA",
-        "description": "Build high-volume streaming ETL pipelines, data lakehouse storage architectures, and automated schema validation tests.",
-        "required_skills": ["Python", "SQL", "Database Design"],
-        "preferred_skills": ["PostgreSQL", "Docker", "Git"],
-    },
-    {
-        "title": "Business Intelligence Intern",
-        "company": "Insightful Markets",
-        "location": "Atlanta, GA (Hybrid)",
-        "description": "Translate multidimensional operational data into actionable visual dashboards and statistical performance reports.",
-        "required_skills": ["SQL", "Data Analysis", "Data Visualization"],
-        "preferred_skills": ["Python", "Statistics", "Pandas"],
-    },
+        db.commit()
 
-    # Cloud & DevOps
-    {
-        "title": "Cloud Engineering Intern",
-        "company": "SkyHigh Infrastructure",
-        "location": "Seattle, WA",
-        "description": "Provision, monitor, and optimize scalable cloud architecture, serverless execution layers, and multi-region storage systems.",
-        "required_skills": ["AWS", "Docker", "Git"],
-        "preferred_skills": ["CI/CD", "Linux", "Kubernetes"],
-    },
-    {
-        "title": "DevOps Intern",
-        "company": "Continuous Delivery Works",
-        "location": "Remote / Austin, TX",
-        "description": "Implement automated CI/CD deployment pipelines, container orchestration, and real-time infrastructure observability.",
-        "required_skills": ["Docker", "Git", "GitHub"],
-        "preferred_skills": ["Kubernetes", "CI/CD", "Linux", "AWS"],
-    },
-]
+        # 2. Build map of all canonical skills
+        skills_map = {s.name.lower(): s for s in db.query(Skill).all()}
 
+        # 3. Additive Seeding of the 15 Indian Demo Profiles
+        print("\n[3/5] Seeding 15 Indian Demo Profiles...")
+        created_or_found_students = {}
 
-def init_db(db: Session) -> None:
-    """Safely and additively create database tables and seed canonical skills and internships."""
-    # 1. Additive table creation
-    Base.metadata.create_all(bind=engine)
+        for s_data in DEMO_STUDENTS_DATA:
+            name = s_data["name"]
+            email = s_data["email"]
 
-    # 2. Non-destructive Additive Seeding of Centralized Canonical Skills Catalogue
-    existing_skills_list = db.query(Skill).all()
-    existing_skills = {s.name.lower(): s for s in existing_skills_list}
-
-    new_skills_to_add = []
-    for s_data in CANONICAL_SKILLS_CATALOGUE:
-        name_key = s_data["name"].lower()
-        if name_key not in existing_skills:
-            new_skill = Skill(
-                name=s_data["name"],
-                category=s_data["category"],
-                description=s_data["description"]
-            )
-            new_skills_to_add.append(new_skill)
-
-    if new_skills_to_add:
-        db.add_all(new_skills_to_add)
-        db.flush()
-        for ns in new_skills_to_add:
-            existing_skills[ns.name.lower()] = ns
-
-    # 3. Additive Seeding of Expanded Internships
-    existing_internships = {f"{it.title.lower()}::{it.company.lower()}": it for it in db.query(Internship).all()}
-
-    new_internships_to_add = []
-    for it_data in EXPANDED_INTERNSHIPS_DATA:
-        it_key = f"{it_data['title'].lower()}::{it_data['company'].lower()}"
-        if it_key not in existing_internships:
-            new_it = Internship(
-                title=it_data["title"],
-                company=it_data["company"],
-                location=it_data["location"],
-                description=it_data["description"],
-                required_skills=it_data["required_skills"],
-                preferred_skills=it_data["preferred_skills"],
-            )
-            new_internships_to_add.append((new_it, it_data))
-            db.add(new_it)
-
-    if new_internships_to_add:
-        db.flush()
-        for new_it, it_data in new_internships_to_add:
-            existing_internships[f"{it_data['title'].lower()}::{it_data['company'].lower()}"] = new_it
-            for req_name in it_data["required_skills"]:
-                if req_name.lower() in existing_skills:
-                    sk = existing_skills[req_name.lower()]
-                    db.add(InternshipSkill(
-                        internship_id=new_it.id,
-                        skill_id=sk.id,
-                        required=True,
-                        minimum_proficiency="Intermediate"
-                    ))
-
-            for pref_name in it_data["preferred_skills"]:
-                if pref_name.lower() in existing_skills:
-                    sk = existing_skills[pref_name.lower()]
-                    db.add(InternshipSkill(
-                        internship_id=new_it.id,
-                        skill_id=sk.id,
-                        required=False,
-                        minimum_proficiency="Beginner"
-                    ))
-
-    # 4. Additive Seeding of 15 Indian Demo Student Profiles & Portfolios
-    existing_students = {s.email.lower(): s for s in db.query(Student).all()}
-    existing_students_by_name = {s.name.lower(): s for s in existing_students.values()}
-
-    created_students = {}
-    for s_data in DEMO_INDIAN_STUDENTS_DATA:
-        name = s_data["name"]
-        email = s_data["email"]
-
-        st = existing_students.get(email.lower()) or existing_students_by_name.get(name.lower())
-        if not st:
-            st = Student(
-                name=name,
-                email=email,
-                university=s_data["university"],
-                graduation_year=s_data["graduation_year"],
-                password_hash=DEMO_COMMON_PASSWORD_HASH,
-                last_screen="dashboard",
-            )
-            db.add(st)
-            db.flush()
-            existing_students[email.lower()] = st
-            existing_students_by_name[name.lower()] = st
-
-        created_students[name] = st
-
-        # Ensure verified skills
-        existing_student_skills = {ss.skill_id for ss in db.query(StudentSkill).filter(StudentSkill.student_id == st.id).all()}
-        for sk_item in s_data.get("skills", []):
-            sk_obj = existing_skills.get(sk_item["name"].lower())
-            if sk_obj and sk_obj.id not in existing_student_skills:
-                st_skill = StudentSkill(
-                    student_id=st.id,
-                    skill_id=sk_obj.id,
-                    proficiency_level=sk_item["level"],
-                    verification_status=sk_item["status"],
-                    verified_at=datetime.now(timezone.utc) if sk_item["status"] == "verified" else None,
+            st = db.query(Student).filter((Student.email == email) | (Student.name == name)).first()
+            if not st:
+                st = Student(
+                    name=name,
+                    email=email,
+                    university=s_data["university"],
+                    graduation_year=s_data["graduation_year"],
+                    password_hash=COMMON_PASSWORD_HASH,
+                    last_screen="dashboard",
                 )
-                db.add(st_skill)
-                existing_student_skills.add(sk_obj.id)
-
-        # Ensure evidence portfolio
-        existing_ev_titles = {ev.title.lower() for ev in db.query(Evidence).filter(Evidence.student_id == st.id).all()}
-        for ev_item in s_data.get("evidence", []):
-            if ev_item["title"].lower() not in existing_ev_titles:
-                primary_skill_name = ev_item["skills"][0] if ev_item.get("skills") else "Python"
-                primary_skill = existing_skills.get(primary_skill_name.lower())
-
-                ev = Evidence(
-                    student_id=st.id,
-                    skill_id=primary_skill.id if primary_skill else None,
-                    evidence_type=ev_item["type"],
-                    title=ev_item["title"],
-                    description=ev_item["description"],
-                    issuer=ev_item["issuer"],
-                    verification_status=ev_item["status"],
-                    evidence_url=ev_item.get("url"),
-                )
-                db.add(ev)
+                db.add(st)
                 db.flush()
+                print(f" + Created Student: ID {st.id} - '{st.name}' ({st.email}) at {st.university}")
+            else:
+                st.university = s_data["university"]
+                st.graduation_year = s_data["graduation_year"]
+                st.password_hash = COMMON_PASSWORD_HASH
+                print(f" = Updated Student: ID {st.id} - '{st.name}' ({st.email})")
 
-                for sk_name in ev_item.get("skills", []):
-                    sk_obj = existing_skills.get(sk_name.lower())
-                    if sk_obj and sk_obj not in ev.skills:
-                        ev.skills.append(sk_obj)
+            created_or_found_students[name] = st
 
-                existing_ev_titles.add(ev_item["title"].lower())
-
-    # 5. Additive Seeding of Demo Hackathon Teams
-    aarav = created_students.get("Aarav Sharma")
-    aditya = created_students.get("Aditya Mishra")
-    abhishek = created_students.get("Abhishek Mohanty")
-    pooja = created_students.get("Pooja Mishra")
-    rohan = created_students.get("Rohan Das")
-    ananya = created_students.get("Ananya Singh")
-
-    demo_teams = [
-        {
-            "name": "Bharat AI HealthTech",
-            "description": "Building edge-AI and multimodal diagnostics for community healthcare centers across India.",
-            "creator": aarav,
-            "members": [
-                {"student": aarav, "role": "ML & AI Lead", "status": "joined"},
-                {"student": pooja, "role": "GenAI & RAG Specialist", "status": "joined"},
-            ],
-            "required_skills": [
-                {"skill_name": "Python", "level": "Advanced"},
-                {"skill_name": "Deep Learning", "level": "Intermediate"},
-                {"skill_name": "React", "level": "Intermediate"},
-                {"skill_name": "Cloud & Docker", "level": "Intermediate"},
-            ],
-        },
-        {
-            "name": "KisanSetu AgriPlatform",
-            "description": "Decentralized fair-price agricultural marketplace with multilingual voice bidding for Indian farmers.",
-            "creator": aditya,
-            "members": [
-                {"student": aditya, "role": "Frontend & FullStack Lead", "status": "joined"},
-                {"student": ananya, "role": "NLP & Data Lead", "status": "joined"},
-                {"student": rohan, "role": "Backend Architect", "status": "joined"},
-            ],
-            "required_skills": [
-                {"skill_name": "React", "level": "Advanced"},
-                {"skill_name": "Node.js", "level": "Intermediate"},
-                {"skill_name": "Python", "level": "Intermediate"},
-                {"skill_name": "AWS", "level": "Intermediate"},
-            ],
-        },
-        {
-            "name": "FinBridge MicroBharat",
-            "description": "High-throughput micro-credit and automated subsidy dispatch engine for MSMEs.",
-            "creator": abhishek,
-            "members": [
-                {"student": abhishek, "role": "Java Enterprise Lead", "status": "joined"},
-            ],
-            "required_skills": [
-                {"skill_name": "Java", "level": "Advanced"},
-                {"skill_name": "Spring Boot", "level": "Intermediate"},
-                {"skill_name": "SQL", "level": "Intermediate"},
-                {"skill_name": "Docker", "level": "Intermediate"},
-            ],
-        },
-    ]
-
-    for t_info in demo_teams:
-        creator = t_info["creator"]
-        if not creator:
-            continue
-        existing_team = db.query(Team).filter(Team.name == t_info["name"]).first()
-        if not existing_team:
-            new_team = Team(
-                name=t_info["name"],
-                description=t_info["description"],
-                creator_id=creator.id,
-            )
-            db.add(new_team)
-            db.flush()
-
-            for m in t_info["members"]:
-                st_mem = m["student"]
-                if st_mem:
-                    db.add(TeamMember(
-                        team_id=new_team.id,
-                        student_id=st_mem.id,
-                        role=m["role"],
-                        status=m["status"],
-                        joined_at=datetime.now(timezone.utc),
-                    ))
-
-            for req in t_info["required_skills"]:
-                sk_obj = existing_skills.get(req["skill_name"].lower())
-                if sk_obj:
-                    db.add(TeamSkillRequirement(
-                        team_id=new_team.id,
+            # Seed Skills
+            existing_skill_ids = {ss.skill_id for ss in db.query(StudentSkill).filter(StudentSkill.student_id == st.id).all()}
+            for sk_item in s_data.get("skills", []):
+                sk_obj = skills_map.get(sk_item["name"].lower())
+                if sk_obj and sk_obj.id not in existing_skill_ids:
+                    st_skill = StudentSkill(
+                        student_id=st.id,
                         skill_id=sk_obj.id,
-                        minimum_proficiency=req["level"],
-                        required=True,
-                    ))
+                        proficiency_level=sk_item["level"],
+                        verification_status=sk_item["status"],
+                        verified_at=datetime.now(timezone.utc) if sk_item["status"] == "verified" else None,
+                    )
+                    db.add(st_skill)
+                    existing_skill_ids.add(sk_obj.id)
 
-    # 6. Ensure legacy evidence rows have evidence_skills associations
-    all_evidence = db.query(Evidence).options(joinedload(Evidence.skills)).all()
-    for ev in all_evidence:
-        if ev.skill_id and not ev.skills:
-            sk = existing_skills.get(db.query(Skill.name).filter(Skill.id == ev.skill_id).scalar(), None)
-            if not sk:
-                sk = db.query(Skill).filter(Skill.id == ev.skill_id).first()
-            if sk and sk not in ev.skills:
-                ev.skills.append(sk)
+            # Seed Evidence
+            existing_ev_titles = {ev.title.lower() for ev in db.query(Evidence).filter(Evidence.student_id == st.id).all()}
+            for ev_item in s_data.get("evidence", []):
+                if ev_item["title"].lower() not in existing_ev_titles:
+                    primary_skill_name = ev_item["skills"][0] if ev_item.get("skills") else "Python"
+                    primary_skill = skills_map.get(primary_skill_name.lower())
 
-    db.commit()
+                    ev = Evidence(
+                        student_id=st.id,
+                        skill_id=primary_skill.id if primary_skill else None,
+                        evidence_type=ev_item["type"],
+                        title=ev_item["title"],
+                        description=ev_item["description"],
+                        issuer=ev_item["issuer"],
+                        verification_status=ev_item["status"],
+                        evidence_url=ev_item.get("url"),
+                    )
+                    db.add(ev)
+                    db.flush()
+
+                    # Attach multi-skill association
+                    for sk_name in ev_item.get("skills", []):
+                        sk_obj = skills_map.get(sk_name.lower())
+                        if sk_obj and sk_obj not in ev.skills:
+                            ev.skills.append(sk_obj)
+
+                    existing_ev_titles.add(ev_item["title"].lower())
+
+            # Seed Live Activity Feed Item
+            has_activity = db.query(Activity).filter(Activity.student_id == st.id).first()
+            if not has_activity:
+                db.add(Activity(
+                    student_id=st.id,
+                    activity_type="verification",
+                    title="Skill Passport Verified",
+                    description=f"{s_data['skills'][0]['name']} & technical evidence verified by SkillBridge Protocol.",
+                    icon="verified",
+                    related_entity_type="student",
+                    related_entity_id=st.id,
+                    is_read=False,
+                ))
+
+        db.commit()
+
+        # 4. Additive Seeding of Demo Hackathon Teams with Indian Student Leads & Gaps
+        print("\n[4/5] Seeding Hackathon Teams & Requirements...")
+        aarav = created_or_found_students.get("Aarav Sharma")
+        aditya = created_or_found_students.get("Aditya Mishra")
+        abhishek = created_or_found_students.get("Abhishek Mohanty")
+        pooja = created_or_found_students.get("Pooja Mishra")
+        rohan = created_or_found_students.get("Rohan Das")
+        ananya = created_or_found_students.get("Ananya Singh")
+
+        teams_to_seed = [
+            {
+                "name": "Bharat AI HealthTech",
+                "description": "Building edge-AI and multimodal diagnostics for community healthcare centers across India.",
+                "creator": aarav,
+                "members": [
+                    {"student": aarav, "role": "ML & AI Lead", "status": "joined"},
+                    {"student": pooja, "role": "GenAI & RAG Specialist", "status": "joined"},
+                ],
+                "required_skills": [
+                    {"skill_name": "Python", "level": "Advanced"},
+                    {"skill_name": "Deep Learning", "level": "Intermediate"},
+                    {"skill_name": "React", "level": "Intermediate"},
+                    {"skill_name": "Cloud & Docker", "level": "Intermediate"},
+                ],
+            },
+            {
+                "name": "KisanSetu AgriPlatform",
+                "description": "Decentralized fair-price agricultural marketplace with multilingual voice bidding for Indian farmers.",
+                "creator": aditya,
+                "members": [
+                    {"student": aditya, "role": "Frontend & FullStack Lead", "status": "joined"},
+                    {"student": ananya, "role": "NLP & Data Lead", "status": "joined"},
+                    {"student": rohan, "role": "Backend Architect", "status": "joined"},
+                ],
+                "required_skills": [
+                    {"skill_name": "React", "level": "Advanced"},
+                    {"skill_name": "Node.js", "level": "Intermediate"},
+                    {"skill_name": "Python", "level": "Intermediate"},
+                    {"skill_name": "AWS", "level": "Intermediate"},
+                ],
+            },
+            {
+                "name": "FinBridge MicroBharat",
+                "description": "High-throughput micro-credit and automated subsidy dispatch engine for MSMEs.",
+                "creator": abhishek,
+                "members": [
+                    {"student": abhishek, "role": "Java Enterprise Lead", "status": "joined"},
+                ],
+                "required_skills": [
+                    {"skill_name": "Java", "level": "Advanced"},
+                    {"skill_name": "Spring Boot", "level": "Intermediate"},
+                    {"skill_name": "SQL", "level": "Intermediate"},
+                    {"skill_name": "Docker", "level": "Intermediate"},
+                ],
+            },
+        ]
+
+        for t_info in teams_to_seed:
+            creator = t_info["creator"]
+            if not creator:
+                continue
+            existing_team = db.query(Team).filter(Team.name == t_info["name"]).first()
+            if not existing_team:
+                new_team = Team(
+                    name=t_info["name"],
+                    description=t_info["description"],
+                    creator_id=creator.id,
+                )
+                db.add(new_team)
+                db.flush()
+                print(f" + Created Team: ID {new_team.id} - '{new_team.name}' (Lead: {creator.name})")
+
+                for m in t_info["members"]:
+                    st_mem = m["student"]
+                    if st_mem:
+                        db.add(TeamMember(
+                            team_id=new_team.id,
+                            student_id=st_mem.id,
+                            role=m["role"],
+                            status=m["status"],
+                            joined_at=datetime.now(timezone.utc),
+                        ))
+
+                for req in t_info["required_skills"]:
+                    sk_obj = skills_map.get(req["skill_name"].lower())
+                    if sk_obj:
+                        db.add(TeamSkillRequirement(
+                            team_id=new_team.id,
+                            skill_id=sk_obj.id,
+                            minimum_proficiency=req["level"],
+                            required=True,
+                        ))
+            else:
+                print(f" = Team exists: ID {existing_team.id} - '{existing_team.name}'")
+
+        db.commit()
+
+        # 5. Verification & Summary
+        print("\n[5/5] Final Verification of Database Pool:")
+        all_st = db.query(Student).all()
+        print(f"Total Active Students in Database: {len(all_st)}")
+        for st in all_st:
+            ev_count = db.query(Evidence).filter(Evidence.student_id == st.id).count()
+            sk_count = db.query(StudentSkill).filter(StudentSkill.student_id == st.id).count()
+            print(f" - [{st.id}] {st.name} <{st.email}> | University: {st.university} | Skills: {sk_count}, Evidence: {ev_count}")
+
+        teams_count = db.query(Team).count()
+        print(f"\nTotal Teams in Database: {teams_count}")
+        pending_ev = db.query(Evidence).filter(Evidence.verification_status == "pending").count()
+        print(f"Total Pending Evidence in Admin Queue: {pending_ev}")
+        print("\nSUCCESS: All 15 Indian Demo Profiles and Hackathon Teams are live and ready for demo!")
+
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    seed_demo_accounts()

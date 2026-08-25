@@ -18,7 +18,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentScreen,
   onNavigate,
   pendingCount,
-  studentName = 'Alex Rivera',
+  studentName = 'Aarav Sharma',
   studentId,
   onSwitchStudent,
   onLogout,
