@@ -227,6 +227,7 @@ export interface ApiTeamCandidateRecommendation {
   matched_skills: ApiCandidateSkillContribution[];
   skills_contributed: string[];
   complementary_skills: string[];
+  verified_skills?: string[];
   missing_team_skills: string[];
   explanation: string;
 }

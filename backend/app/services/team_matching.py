@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Set
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models.student import Student
 from app.models.skill import StudentSkill, Skill
 from app.models.evidence import Evidence
@@ -66,9 +66,28 @@ class TeamMatchingService:
         """
         # 1. Map candidate's verified skills
         candidate_verified_skills: Dict[int, StudentSkill] = {}
+        all_candidate_verified_skills: List[str] = []
         for ss in candidate.skills:
-            if ss.verification_status == "verified":
+            if ss.verification_status == "verified" and ss.skill:
                 candidate_verified_skills[ss.skill_id] = ss
+                if ss.skill.name not in all_candidate_verified_skills:
+                    all_candidate_verified_skills.append(ss.skill.name)
+
+        # If candidate has zero verified skills, return empty 0% match without fabricated skills
+        if not candidate_verified_skills:
+            return TeamCandidateRecommendation(
+                candidate_id=candidate.id,
+                candidate_name=candidate.name,
+                university=candidate.university,
+                role_suggestion="Student",
+                match_score=0.0,
+                matched_skills=[],
+                skills_contributed=[],
+                complementary_skills=[],
+                verified_skills=[],
+                missing_team_skills=[r.skill.name for r in team_requirements if r.skill and r.skill_id not in covered_team_skill_ids],
+                explanation="No verified skills in Digital Skill Passport to evaluate team matching.",
+            )
 
         # 2. Map candidate's verified evidence
         verified_evidence_by_skill: Dict[int, List[SupportingEvidenceDetail]] = {}
@@ -87,7 +106,6 @@ class TeamMatchingService:
         
         team_unfilled_reqs = [r for r in team_requirements if r.skill_id not in covered_team_skill_ids]
         if not team_unfilled_reqs:
-            # If all explicit requirements are covered, consider all team requirements
             team_unfilled_reqs = team_requirements
 
         total_gaps_count = max(1, len(team_unfilled_reqs))
@@ -125,28 +143,22 @@ class TeamMatchingService:
                 if is_unfilled_gap:
                     remaining_unfilled_gaps.append(skill_name)
 
-        # 4. Identify Complementary Skills (candidate has verified skills in other tech domains)
-        candidate_domains = {cls.get_skill_domain(ss.skill.name) for ss in candidate.skills if ss.skill and ss.verification_status == "verified"}
-        team_req_domains = {cls.get_skill_domain(r.skill.name) for r in team_requirements if r.skill}
+        # 4. Identify Complementary Skills (candidate has verified skills not in team requirements)
+        team_req_skill_names = {r.skill.name.lower() for r in team_requirements if r.skill}
         
         complementary_skills: List[str] = []
-        for ss in candidate.skills:
-            if ss.skill and ss.verification_status == "verified":
-                s_domain = cls.get_skill_domain(ss.skill.name)
-                # If candidate has skill not already in team requirements or contributed list
-                if ss.skill.name not in skills_contributed and ss.skill.name not in complementary_skills:
-                    complementary_skills.append(ss.skill.name)
+        for s_name in all_candidate_verified_skills:
+            if s_name not in skills_contributed and s_name.lower() not in team_req_skill_names and s_name not in complementary_skills:
+                complementary_skills.append(s_name)
 
         # 5. Transparent Match Score Calculation:
-        # - Gap fulfillment weight: 65% of score
-        # - Complementarity & verified breadth: 35% of score
-        gap_fill_ratio = gaps_filled_by_candidate / total_gaps_count if total_gaps_count > 0 else 1.0
-        complementary_bonus = min(35.0, len(complementary_skills) * 7.0 + len(matched_contributions) * 5.0)
+        # - Gap fulfillment weight: 70% of score
+        # - Complementarity & verified breadth: 30% of score
+        gap_fill_ratio = gaps_filled_by_candidate / total_gaps_count if total_gaps_count > 0 else 0.0
+        gap_score = gap_fill_ratio * 70.0
+        comp_score = min(30.0, len(complementary_skills) * 7.5)
         
-        raw_score = (gap_fill_ratio * 65.0) + complementary_bonus
-        # Minimum baseline score of 40% if candidate has verified skills, max 100%
-        if candidate_verified_skills and raw_score < 45.0:
-            raw_score = 45.0 + min(25.0, len(candidate_verified_skills) * 5.0)
+        raw_score = gap_score + comp_score
         match_score = min(100.0, round(raw_score, 1))
 
         # 6. Generate Role Suggestion
@@ -154,38 +166,35 @@ class TeamMatchingService:
         all_candidate_skills_lower = [s.lower() for s in skills_contributed + complementary_skills]
         if any("machine learning" in s or "ai" in s for s in all_candidate_skills_lower):
             role_suggestion = "ML / AI Specialist"
-        elif any("react" in s or "frontend" in s or "css" in s for s in all_candidate_skills_lower):
+        elif any("react" in s or "frontend" in s or "ui" in s for s in all_candidate_skills_lower):
             role_suggestion = "Frontend & UI Engineer"
-        elif any("fastapi" in s or "spring boot" in s or "backend" in s or "api" in s for s in all_candidate_skills_lower):
+        elif any("fastapi" in s or "spring" in s or "backend" in s or "node" in s for s in all_candidate_skills_lower):
             role_suggestion = "Backend Architect"
-        elif any("sql" in s or "data" in s or "database" in s for s in all_candidate_skills_lower):
+        elif any("sql" in s or "data" in s or "database" in s or "postgres" in s for s in all_candidate_skills_lower):
             role_suggestion = "Data Systems Engineer"
-        elif any("docker" in s or "aws" in s or "cloud" in s or "ci/cd" in s for s in all_candidate_skills_lower):
+        elif any("docker" in s or "aws" in s or "cloud" in s or "devops" in s for s in all_candidate_skills_lower):
             role_suggestion = "Cloud & DevOps Lead"
         elif skills_contributed:
             role_suggestion = f"{skills_contributed[0]} Specialist"
 
         # 7. Construct Transparent Explanation
-        explanation_parts = []
-        if gaps_filled_by_candidate > 0:
-            explanation_parts.append(
-                f"Fills {gaps_filled_by_candidate} currently missing team skill requirement(s): {', '.join(skills_contributed)}."
+        if skills_contributed and complementary_skills:
+            explanation = (
+                f"Strong match because the candidate provides {', '.join(skills_contributed)}, "
+                f"which help fill the team's current skill gaps. Additional complementary capability comes from {', '.join(complementary_skills[:3])}."
             )
         elif skills_contributed:
-            explanation_parts.append(f"Reinforces core team capabilities in {', '.join(skills_contributed)}.")
-        
-        if complementary_skills:
-            top_comp = complementary_skills[:3]
-            explanation_parts.append(
-                f"Brings valuable complementary skill coverage in {', '.join(top_comp)}."
+            explanation = (
+                f"Strong match because the candidate provides {', '.join(skills_contributed)}, "
+                f"which help fill the team's current skill gaps."
             )
-        
-        if remaining_unfilled_gaps:
-            explanation_parts.append(f"Remaining team gaps: {', '.join(remaining_unfilled_gaps[:3])}.")
+        elif complementary_skills:
+            explanation = (
+                f"Complementary capability match: candidate brings verified expertise in {', '.join(complementary_skills[:3])} "
+                f"to expand the team's technical breadth."
+            )
         else:
-            explanation_parts.append("Fully satisfies open team skill requirements.")
-
-        explanation = f"{match_score:.1f}% Team Match. " + " ".join(explanation_parts)
+            explanation = "Candidate has verified skills, but does not directly match the team's current open skill requirements."
 
         return TeamCandidateRecommendation(
             candidate_id=candidate.id,
@@ -196,6 +205,7 @@ class TeamMatchingService:
             matched_skills=matched_contributions,
             skills_contributed=skills_contributed,
             complementary_skills=complementary_skills[:5],
+            verified_skills=all_candidate_verified_skills,
             missing_team_skills=remaining_unfilled_gaps,
             explanation=explanation,
         )
@@ -230,13 +240,13 @@ class TeamMatchingService:
                     if ss.verification_status == "verified":
                         covered_team_skill_ids.add(ss.skill_id)
 
-        # 2. Query peer candidates
+        # 2. Query peer candidates efficiently using selectinload
         candidates = (
             db.query(Student)
             .options(
-                joinedload(Student.skills).joinedload(StudentSkill.skill),
-                joinedload(Student.evidence).joinedload(Evidence.skill),
-                joinedload(Student.evidence).joinedload(Evidence.skills),
+                selectinload(Student.skills).joinedload(StudentSkill.skill),
+                selectinload(Student.evidence).joinedload(Evidence.skill),
+                selectinload(Student.evidence).selectinload(Evidence.skills),
             )
             .filter(Student.id.notin_(excluded_student_ids))
             .all()

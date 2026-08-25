@@ -122,6 +122,7 @@ class TeamCandidateRecommendation(BaseModel):
     matched_skills: List[CandidateSkillContribution] = []
     skills_contributed: List[str] = []
     complementary_skills: List[str] = []
+    verified_skills: List[str] = []
     missing_team_skills: List[str] = []
     explanation: str
 

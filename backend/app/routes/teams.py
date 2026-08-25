@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.database.session import get_db
 from app.models.team import Team, TeamMember, TeamSkillRequirement, TeamInvitation
 from app.models.student import Student
@@ -123,10 +123,10 @@ def list_teams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -
         db.query(Team)
         .options(
             joinedload(Team.creator),
-            joinedload(Team.members).joinedload(TeamMember.student),
-            joinedload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
-            joinedload(Team.invitations).joinedload(TeamInvitation.sender),
-            joinedload(Team.invitations).joinedload(TeamInvitation.recipient),
+            selectinload(Team.members).joinedload(TeamMember.student),
+            selectinload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
+            selectinload(Team.invitations).joinedload(TeamInvitation.sender),
+            selectinload(Team.invitations).joinedload(TeamInvitation.recipient),
         )
         .order_by(Team.created_at.desc())
         .offset(skip)

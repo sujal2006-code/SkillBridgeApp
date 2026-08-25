@@ -116,7 +116,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       onLoginSuccess(response);
     } catch (err: any) {
       setIsLoading(false);
-      setErrorMessage(err.message || 'Account already exists. Please log in.');
+      setErrorMessage(err.message || 'Account already exists. Please use a different name.');
     }
   };
 

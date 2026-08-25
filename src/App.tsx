@@ -286,6 +286,14 @@ export default function App() {
       const avatar = AVATAR_LIST[index % AVATAR_LIST.length];
       const isInvited = invitedStudentIds.has(rec.candidate_id);
 
+      const allCandidateSkills = rec.verified_skills && rec.verified_skills.length > 0
+        ? rec.verified_skills
+        : Array.from(new Set([
+            ...(rec.skills_contributed || []),
+            ...(rec.complementary_skills || []),
+            ...(rec.matched_skills || []).map((ms) => ms.skill_name),
+          ]));
+
       return {
         id: `candidate-${rec.candidate_id}`,
         name: rec.candidate_name,
@@ -294,7 +302,7 @@ export default function App() {
         avatar,
         matchPercentage: Math.round(rec.match_score),
         aiInsight: rec.explanation,
-        verifiedSkills: (rec.matched_skills || []).map((ms) => ms.skill_name),
+        verifiedSkills: allCandidateSkills,
         skillsContributed: rec.skills_contributed || [],
         complementarySkills: rec.complementary_skills || [],
         missingSkills: rec.missing_team_skills || [],

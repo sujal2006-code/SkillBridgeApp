@@ -52,8 +52,8 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
             detail="Password is required.",
         )
 
-
     # 2. Derive email/name normalization variants for lookup
+    name_normalized = name_clean.lower()
     if "@" in name_clean:
         normalized_email = name_clean.lower()
         derived_email = normalized_email
@@ -64,23 +64,20 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
         derived_email = f"{base_slug}@skillbridge.edu"
         normalized_email = derived_email
 
-    # 3. Lookup student by exact name, email, or normalized variants (case-insensitive)
-    existing = (
-        db.query(Student)
-        .options(
-            joinedload(Student.skills).joinedload(StudentSkill.skill),
-            joinedload(Student.evidence).joinedload(Evidence.skill),
-            joinedload(Student.evidence).joinedload(Evidence.skills),
-        )
-        .filter(
-            (func.lower(Student.name) == name_clean.lower())
-            | (func.lower(Student.email) == name_clean.lower())
-            | (func.lower(Student.email) == derived_email.lower())
-            | (Student.name.ilike(name_clean))
-            | (Student.email.ilike(name_clean))
-        )
-        .first()
-    )
+    # 3. Fast and accurate lookup by exact or space-normalized name & email
+    existing_by_name = db.query(Student).filter(func.lower(Student.name) == name_normalized).first()
+    existing_by_email = db.query(Student).filter(
+        (func.lower(Student.email) == normalized_email.lower())
+        | (func.lower(Student.email) == derived_email.lower())
+    ).first()
+
+    if not existing_by_name:
+        for s in db.query(Student).all():
+            if " ".join(s.name.strip().split()).lower() == name_normalized:
+                existing_by_name = s
+                break
+
+    existing = existing_by_name or existing_by_email
 
     # 4. Handle CREATE ACCOUNT / REGISTER mode
     if payload.mode == "register":
@@ -100,17 +97,23 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
                     detail="Passwords do not match.",
                 )
 
-        # Check duplicate account by name
-        if existing:
+        # A. Check duplicate account by name (case-insensitive, trimmed, multiple spaces collapsed)
+        if existing_by_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account already exists. Please log in.",
+                detail="Account already exists. Please use a different name.",
             )
 
+        # B. Check duplicate account by email
+        if existing_by_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this email already exists. Please use a different email or log in.",
+            )
 
         # Create new student profile in persistent PostgreSQL
         final_email = normalized_email
-        if db.query(Student).filter(Student.email == final_email).first():
+        if db.query(Student).filter(func.lower(Student.email) == final_email.lower()).first():
             final_email = f"{base_slug}.{int(time.time())}@skillbridge.edu"
 
         new_student = Student(
@@ -122,7 +125,14 @@ def login_student(payload: StudentLoginRequest, db: Session = Depends(get_db)) -
             last_screen="dashboard",
         )
         db.add(new_student)
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account already exists. Please use a different name.",
+            )
         db.refresh(new_student)
 
         new_student.skills = []
@@ -312,15 +322,42 @@ def onboard_student(payload: StudentOnboardRequest, db: Session = Depends(get_db
 @router.post("", response_model=StudentRead, status_code=status.HTTP_201_CREATED)
 def create_student(student_in: StudentCreate, db: Session = Depends(get_db)) -> Student:
     """Register a new student."""
-    existing = db.query(Student).filter(Student.email == student_in.email).first()
-    if existing:
+    name_clean = " ".join(student_in.name.strip().split())
+    name_lower = name_clean.lower()
+    email_clean = student_in.email.strip().lower()
+
+    # Check duplicate name
+    for s in db.query(Student).all():
+        if " ".join(s.name.strip().split()).lower() == name_lower:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account already exists. Please use a different name.",
+            )
+
+    # Check duplicate email
+    existing_email = db.query(Student).filter(func.lower(Student.email) == email_clean).first()
+    if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A student with this email already exists.",
+            detail="An account with this email already exists. Please use a different email or log in.",
         )
-    student = Student(**student_in.model_dump())
+
+    student = Student(
+        name=name_clean,
+        email=email_clean,
+        university=student_in.university,
+        graduation_year=student_in.graduation_year,
+        last_screen="dashboard",
+    )
     db.add(student)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account already exists. Please use a different name.",
+        )
     db.refresh(student)
     return student
 
