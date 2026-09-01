@@ -95,6 +95,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         errorMessage = `API endpoint not found (HTTP 404 on ${url}). Please ensure backend is running.`;
       }
 
+      if (response.status === 401 && !path.includes('/students/login') && typeof window !== 'undefined') {
+        localStorage.removeItem('skillbridge_auth_token');
+        localStorage.removeItem('skillbridge_student_id');
+        localStorage.removeItem('skillbridge_student_name');
+        localStorage.removeItem('skillbridge_last_screen');
+      }
+
       throw new ApiError(response.status, typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage), responseData);
     }
 

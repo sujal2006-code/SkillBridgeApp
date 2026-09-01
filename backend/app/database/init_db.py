@@ -1139,3 +1139,32 @@ def init_db(db: Session) -> None:
                 t.project_name = f"{t.name} Collaborative Initiative"
 
     db.commit()
+
+
+_db_initialized = False
+
+
+def ensure_db_initialized(db: Session = None) -> None:
+    """
+    Thread-safe and serverless-safe database initializer.
+    Guarantees that tables exist and canonical demo data is seeded
+    even in environments (e.g. Vercel serverless) where ASGI lifespan is skipped.
+    """
+    global _db_initialized
+    if _db_initialized:
+        return
+
+    from app.database.session import SessionLocal
+    own_session = False
+    if db is None:
+        db = SessionLocal()
+        own_session = True
+
+    try:
+        init_db(db)
+        _db_initialized = True
+    except Exception as e:
+        print(f"[WARN] ensure_db_initialized error: {e}")
+    finally:
+        if own_session:
+            db.close()

@@ -1,6 +1,8 @@
+import os
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 from app.core.config import settings
 
 # SQLAlchemy declarative base for data models
@@ -8,34 +10,31 @@ Base = declarative_base()
 
 # SQLAlchemy engine - PostgreSQL ready & SQLite local dev compatible
 db_url = settings.sync_database_url
-connect_args = {}
 
 if db_url.startswith("sqlite"):
-    connect_args["check_same_thread"] = False
+    connect_args = {"check_same_thread": False}
     engine = create_engine(
         db_url,
         connect_args=connect_args,
     )
 else:
-    # Production PostgreSQL connection with serverless-friendly pooling & auto-reconnect
-    try:
-        engine = create_engine(
-            db_url,
-            pool_pre_ping=True,
-            pool_recycle=300,
-            pool_size=5,
-            max_overflow=10,
-            connect_args={"connect_timeout": 3},
-        )
-        # Test connection immediately with short timeout
-        with engine.connect() as conn:
-            pass
-    except Exception as e:
-        print(f"[WARN] Remote database connection failed ({e}). Falling back to local SQLite database.")
-        engine = create_engine(
-            "sqlite:///./skillbridge.db",
-            connect_args={"check_same_thread": False},
-        )
+    # Production PostgreSQL connection (Neon / Supabase / RDS / Serverless)
+    # 1. Normalize postgres:// to postgresql://
+    if db_url.startswith("postgres://"):
+        db_url = "postgresql://" + db_url[len("postgres://"):]
+
+    # 2. Serverless PostgreSQL engine configuration
+    # NullPool prevents connection leaks and broken sockets across serverless invocations
+    # connect_timeout 15s allows Neon computes to cold-start from sleep
+    connect_args = {"connect_timeout": 15}
+    if "sslmode" not in db_url:
+        connect_args["sslmode"] = "require"
+
+    engine = create_engine(
+        db_url,
+        poolclass=NullPool,
+        connect_args=connect_args,
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

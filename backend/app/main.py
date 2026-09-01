@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.database.session import SessionLocal
-from app.database.init_db import init_db
+from app.database.init_db import ensure_db_initialized
 from app.routes.health import router as health_router
 from app.routes.students import router as students_router
 from app.routes.skills import router as skills_router
@@ -15,17 +14,11 @@ from app.routes.activities import router as activities_router
 from app.routes.admin import router as admin_router
 
 
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context for startup and shutdown events."""
     # Initialize database tables and seed demo data on startup
-    db = SessionLocal()
-    try:
-        init_db(db)
-    finally:
-        db.close()
+    ensure_db_initialized()
     yield
 
 
@@ -38,6 +31,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# First-request lazy initialization guarantee for serverless (Vercel) where lifespan may be skipped
+@app.middleware("http")
+async def ensure_db_middleware(request: Request, call_next):
+    ensure_db_initialized()
+    response = await call_next(request)
+    return response
+
 # CORS configuration allowing localhost and vercel.app origins
 app.add_middleware(
     CORSMiddleware,
@@ -49,21 +49,25 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+ROUTERS = [
+    health_router,
+    students_router,
+    skills_router,
+    evidence_router,
+    internships_router,
+    recommendations_router,
+    teams_router,
+    activities_router,
+    admin_router,
+]
 
+# Include API Routers under /api (standard for local dev & explicit paths)
+for r in ROUTERS:
+    app.include_router(r, prefix=settings.API_V1_STR)
 
-# Include API Routers under /api
-app.include_router(health_router, prefix=settings.API_V1_STR)
-app.include_router(students_router, prefix=settings.API_V1_STR)
-app.include_router(skills_router, prefix=settings.API_V1_STR)
-
-
-app.include_router(evidence_router, prefix=settings.API_V1_STR)
-app.include_router(internships_router, prefix=settings.API_V1_STR)
-app.include_router(recommendations_router, prefix=settings.API_V1_STR)
-app.include_router(teams_router, prefix=settings.API_V1_STR)
-app.include_router(activities_router, prefix=settings.API_V1_STR)
-app.include_router(admin_router, prefix=settings.API_V1_STR)
-
+# Also include API Routers under root prefix (handles Vercel rewrite cases where /api is stripped)
+for r in ROUTERS:
+    app.include_router(r, prefix="")
 
 
 @app.get("/")

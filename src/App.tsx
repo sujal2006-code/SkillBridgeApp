@@ -72,12 +72,17 @@ export default function App() {
     return saved ? Number(saved) : null;
   });
   const [currentScreen, setCurrentScreen] = useState<ScreenType>(() => {
+    const token = localStorage.getItem('skillbridge_auth_token');
+    if (!token) {
+      if (typeof window !== 'undefined' && window.location.hash && window.location.hash !== '#/login') {
+        window.history.replaceState({ screen: 'login' }, '', '#/login');
+      }
+      return 'login';
+    }
     const hash = window.location.hash.replace('#/', '').trim();
     if (hash && VALID_SCREENS.includes(hash as ScreenType)) {
       return hash as ScreenType;
     }
-    const token = localStorage.getItem('skillbridge_auth_token');
-    if (!token) return 'login';
     const savedScreen = localStorage.getItem('skillbridge_last_screen') as ScreenType;
     return savedScreen && savedScreen !== 'login' ? savedScreen : 'dashboard';
   });
@@ -461,9 +466,20 @@ export default function App() {
         localStorage.removeItem('skillbridge_student_id');
         localStorage.removeItem('skillbridge_student_name');
         localStorage.removeItem('skillbridge_last_screen');
+        localStorage.removeItem('skillbridge_admin_token');
+        sessionStorage.clear();
         setAuthToken(null);
         setActiveStudentId(null);
         setStudent(null);
+        setActiveTeamId(null);
+        setActiveTeam(null);
+        setSkills([]);
+        setEvidenceList([]);
+        setInternships([]);
+        setCandidates([]);
+        setActivities([]);
+        setQueue([]);
+        window.history.replaceState({ screen: 'login' }, '', '#/login');
         setCurrentScreen('login');
         showToast('Your session has expired. Please sign in or create an account to continue.', 'info');
       } else {
@@ -529,14 +545,19 @@ export default function App() {
     localStorage.removeItem('skillbridge_student_id');
     localStorage.removeItem('skillbridge_student_name');
     localStorage.removeItem('skillbridge_last_screen');
+    localStorage.removeItem('skillbridge_admin_token');
+    sessionStorage.clear();
     setAuthToken(null);
     setActiveStudentId(null);
     setStudent(null);
+    setActiveTeamId(null);
+    setActiveTeam(null);
     setSkills([]);
     setEvidenceList([]);
     setInternships([]);
     setCandidates([]);
     setActivities([]);
+    setQueue([]);
     window.history.pushState({ screen: 'login' }, '', '#/login');
     setCurrentScreen('login');
     showToast('Logged out successfully.', 'info');
