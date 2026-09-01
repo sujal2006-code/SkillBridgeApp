@@ -38,6 +38,8 @@ def _map_team_to_schema(team: Team, db: Session) -> TeamRead:
     joined_student_ids: List[int] = []
 
     for m in team.members:
+        if m.status != "joined":
+            continue
         member_student = m.student
         member_name = member_student.name if member_student else None
         
@@ -689,7 +691,7 @@ def reject_team_invitation(
         TeamMember.student_id == auth_student_id,
     ).first()
     if member:
-        member.status = "declined"
+        db.delete(member)
 
     # Mark notification as read
     notif = db.query(Activity).filter(
