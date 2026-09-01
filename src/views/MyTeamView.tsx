@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ApiTeam, ScreenType, ApiTeamMember } from '../types';
 import { teamsApi, CreateTeamPayload } from '../api/teams';
 import { CircularProgress } from '../components/common/CircularProgress';
+import { getStudentAvatar } from '../utils/avatars';
 
 interface MyTeamViewProps {
   studentName?: string;
@@ -426,9 +427,11 @@ export const MyTeamView: React.FC<MyTeamViewProps> = ({
                   <div>
                     <div className="flex items-start justify-between mb-2.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-lg bg-[#00687a] text-white font-bold text-sm flex items-center justify-center shadow-2xs shrink-0">
-                          {member.student_name ? member.student_name.charAt(0) : 'M'}
-                        </div>
+                        <img
+                          src={getStudentAvatar(member.student_name || '', member.student_id)}
+                          alt={member.student_name || 'Member'}
+                          className="w-10 h-10 rounded-lg object-cover shadow-2xs shrink-0 border border-slate-200"
+                        />
                         <div>
                           <h4 className="font-['Hanken_Grotesk'] text-sm font-bold text-slate-900 flex items-center gap-1">
                             {member.student_name || `Student #${member.student_id}`}

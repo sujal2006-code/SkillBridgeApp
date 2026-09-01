@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TeamCandidate, ScreenType, ApiTeam } from '../types';
 import { CircularProgress } from '../components/common/CircularProgress';
 import { teamsApi } from '../api/teams';
+import { getStudentAvatar } from '../utils/avatars';
 
 interface TeamBuilderViewProps {
   studentName?: string;
@@ -55,23 +56,13 @@ export const TeamBuilderView: React.FC<TeamBuilderViewProps> = ({
     setActiveRoleFilter(filterValue);
     setIsFiltering(true);
     try {
-      const recs = await teamsApi.getTeamCandidates(teamId, filterValue === 'All' ? undefined : filterValue);
+      const recs = await teamsApi.getTeamCandidates(teamId || 0, filterValue === 'All' ? undefined : filterValue);
       if (recs && recs.length > 0) {
-        const AVATARS = [
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-        ];
         const mapped: TeamCandidate[] = recs.map((rec) => {
           const original = initialCandidates.find(
             (c) => c.id === `candidate-${rec.candidate_id}` || c.id === String(rec.candidate_id)
           );
-          const avatar = original?.avatar || AVATARS[rec.candidate_id % AVATARS.length];
+          const avatar = original?.avatar || getStudentAvatar(rec.candidate_name, rec.candidate_id);
           return {
             id: `candidate-${rec.candidate_id}`,
             name: rec.candidate_name,
@@ -123,20 +114,16 @@ export const TeamBuilderView: React.FC<TeamBuilderViewProps> = ({
   ];
 
   const currentMembersCount = activeTeam 
-    ? Math.max(1, activeTeam.members.filter(m => m.status === 'joined').length) 
-    : 1;
+    ? activeTeam.members.filter(m => m.status === 'joined').length 
+    : 0;
 
-  const teamCoverageScore = typeof activeTeam?.team_coverage_percentage === 'number'
+  const teamCoverageScore = activeTeam && typeof activeTeam.team_coverage_percentage === 'number'
     ? activeTeam.team_coverage_percentage
-    : 20;
+    : 0;
 
-  const coveredList = activeTeam?.skills_covered && activeTeam.skills_covered.length > 0
-    ? activeTeam.skills_covered
-    : ['Frontend'];
+  const coveredList = activeTeam?.skills_covered || [];
 
-  const missingList = activeTeam?.skills_missing && activeTeam.skills_missing.length > 0
-    ? activeTeam.skills_missing
-    : ['Backend', 'Database', 'AI/ML', 'UI/UX'];
+  const missingList = activeTeam?.skills_missing || [];
 
   if (isLoading) {
     return (
@@ -403,19 +390,42 @@ export const TeamBuilderView: React.FC<TeamBuilderViewProps> = ({
                   Team Composition
                 </span>
                 <h3 className="font-['Hanken_Grotesk'] text-sm font-bold text-slate-900 truncate">
-                  {activeTeam?.name || 'Hex Bridge'}
+                  {activeTeam ? activeTeam.name : 'No Active Team'}
                 </h3>
               </div>
-              <span className="text-[11px] font-bold text-[#00687a] bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200 shrink-0">
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                activeTeam 
+                  ? 'text-[#00687a] bg-cyan-50 border-cyan-200' 
+                  : 'text-slate-500 bg-slate-100 border-slate-200'
+              }`}>
                 {currentMembersCount}/6 Members
               </span>
             </div>
 
-            {/* TEAM MEMBERS */}
-            <div className="mt-3 space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Team Members
-              </span>
+            {!activeTeam ? (
+              <div className="mt-3.5 p-4 rounded-xl bg-slate-50/80 border border-slate-200/80 text-center">
+                <div className="w-10 h-10 rounded-full bg-cyan-50 text-[#00687a] flex items-center justify-center mx-auto mb-2 border border-cyan-100">
+                  <span className="material-symbols-outlined text-[20px]">group_add</span>
+                </div>
+                <h4 className="text-xs font-bold text-slate-800">No Team Created Yet</h4>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                  You can explore candidate passports and compatibility. Create a team in My Team to send invitations.
+                </p>
+                <button
+                  onClick={() => onNavigate('my-team')}
+                  className="mt-3 w-full py-2 bg-[#00687a] hover:bg-[#00505e] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[15px]">add_circle</span>
+                  <span>Create Team in My Team</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* TEAM MEMBERS */}
+                <div className="mt-3 space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Team Members
+                  </span>
               
               {/* Leader */}
               <div className="flex items-center gap-2.5 p-2 rounded-lg bg-slate-50 border border-slate-200/80">
@@ -534,6 +544,8 @@ export const TeamBuilderView: React.FC<TeamBuilderViewProps> = ({
               <span className="material-symbols-outlined text-[15px]">diversity_3</span>
               <span>Manage Team & Requirements</span>
             </button>
+            </>
+            )}
           </div>
         </aside>
       </div>

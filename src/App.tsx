@@ -28,6 +28,7 @@ import { BottomNav } from './components/layout/BottomNav';
 import { EvidenceModal } from './components/common/EvidenceModal';
 import { MatchModal } from './components/common/MatchModal';
 import { Toast } from './components/common/Toast';
+import { getStudentAvatar } from './utils/avatars';
 
 import { LoginView } from './views/LoginView';
 import { LandingView } from './views/LandingView';
@@ -286,8 +287,8 @@ export default function App() {
 
   // Convert backend candidate recommendations into UI TeamCandidate view models
   const processTeamCandidates = (recs: ApiTeamCandidateRecommendation[], invitedStudentIds: Set<number>) => {
-    const mapped: TeamCandidate[] = recs.map((rec, index) => {
-      const avatar = AVATAR_LIST[index % AVATAR_LIST.length];
+    const mapped: TeamCandidate[] = recs.map((rec) => {
+      const avatar = getStudentAvatar(rec.candidate_name, rec.candidate_id);
       const isInvited = invitedStudentIds.has(rec.candidate_id);
 
       const allCandidateSkills = rec.verified_skills && rec.verified_skills.length > 0
@@ -418,42 +419,30 @@ export default function App() {
 
       // 5. Fetch Team Builder Teams & Candidate Recommendations from Backend DB
       try {
-        let userTeams = await teamsApi.getMyTeams();
-        let currentTeam = userTeams && userTeams.length > 0 ? userTeams[0] : null;
-        if (!currentTeam) {
-          let existingTeams = await teamsApi.getTeams();
-          currentTeam = existingTeams && existingTeams.length > 0 ? existingTeams[0] : null;
-        }
+        const userTeams = await teamsApi.getMyTeams();
+        const currentTeam = userTeams && userTeams.length > 0 ? userTeams[0] : null;
 
-        if (!currentTeam) {
-          currentTeam = await teamsApi.createTeam({
-            name: 'Hex Bridge',
-            project_name: 'AI & Full Stack Collaborative Platform',
-            description: 'Multidisciplinary engineering team for hackathons and projects.',
-            creator_id: studentData.id,
-            required_domains: ['Frontend', 'Backend', 'Database', 'AI/ML', 'UI/UX'],
+        setActiveTeam(currentTeam);
+        setActiveTeamId(currentTeam ? currentTeam.id : null);
+
+        const invitedIds = new Set<number>();
+        if (currentTeam) {
+          (currentTeam.members || []).forEach((m) => {
+            if (m.student_id !== studentData.id) {
+              invitedIds.add(m.student_id);
+            }
+          });
+          (currentTeam.invitations || []).forEach((inv) => {
+            if (inv.status === 'PENDING') {
+              invitedIds.add(inv.recipient_id);
+            }
           });
         }
 
-        setActiveTeam(currentTeam);
-        setActiveTeamId(currentTeam.id);
-
-        const invitedIds = new Set<number>();
-        (currentTeam.members || []).forEach((m) => {
-          if (m.student_id !== studentData.id) {
-            invitedIds.add(m.student_id);
-          }
-        });
-        (currentTeam.invitations || []).forEach((inv) => {
-          if (inv.status === 'PENDING') {
-            invitedIds.add(inv.recipient_id);
-          }
-        });
-
-        const candRecs = await teamsApi.getTeamCandidates(currentTeam.id);
+        const candRecs = await teamsApi.getTeamCandidates(currentTeam ? currentTeam.id : 0);
         processTeamCandidates(candRecs, invitedIds);
-      } catch {
-        // Ignore team failure
+      } catch (err) {
+        console.error('Error loading team data:', err);
       }
 
       // 6. Fetch total students count
@@ -610,6 +599,13 @@ export default function App() {
 
   // Handler: Invite Team Candidate with persistent backend invitation
   const handleInviteCandidate = async (candidateIdStr: string) => {
+    if (!activeTeamId) {
+      showToast('Please create your project team in My Team first to send invitations!', 'error');
+      setCurrentScreen('my-team');
+      window.history.pushState({ screen: 'my-team' }, '', '#/my-team');
+      return;
+    }
+
     const candidateId = parseInt(candidateIdStr.replace('candidate-', ''), 10);
 
     setCandidates(
@@ -634,8 +630,9 @@ export default function App() {
         if (activeStudentId) {
           await loadBackendData(activeStudentId);
         }
-      } catch {
-        // Optimistic fallback
+      } catch (err: any) {
+        showToast(err.message || 'Failed to send invitation.', 'error');
+        return;
       }
     }
 

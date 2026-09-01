@@ -479,32 +479,34 @@ class TeamMatchingService:
         target_domain: Optional[str] = None,
     ) -> List[TeamCandidateRecommendation]:
         """Retrieve explainable candidate recommendations based on team gaps and role-specific requirements."""
-        team = (
-            db.query(Team)
-            .options(
-                joinedload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
-                joinedload(Team.members).joinedload(TeamMember.student).joinedload(Student.skills),
+        team = None
+        if team_id and team_id > 0:
+            team = (
+                db.query(Team)
+                .options(
+                    joinedload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
+                    joinedload(Team.members).joinedload(TeamMember.student).joinedload(Student.skills),
+                )
+                .filter(Team.id == team_id)
+                .first()
             )
-            .filter(Team.id == team_id)
-            .first()
-        )
-        if not team:
-            return []
 
         # 1. Identify skills already covered by joined team members
         covered_team_skill_ids: Set[int] = set()
-        excluded_student_ids = {team.creator_id}
+        excluded_student_ids: Set[int] = set()
 
-        for member in team.members:
-            if member.status == "joined":
-                excluded_student_ids.add(member.student_id)
-                if member.student:
-                    for ss in member.student.skills:
-                        if ss.verification_status == "verified":
-                            covered_team_skill_ids.add(ss.skill_id)
+        if team:
+            excluded_student_ids.add(team.creator_id)
+            for member in team.members:
+                if member.status == "joined":
+                    excluded_student_ids.add(member.student_id)
+                    if member.student:
+                        for ss in member.student.skills:
+                            if ss.verification_status == "verified":
+                                covered_team_skill_ids.add(ss.skill_id)
 
         # 2. Query peer candidates
-        candidates = (
+        candidates_query = (
             db.query(Student)
             .options(
                 selectinload(Student.skills).joinedload(StudentSkill.skill),
@@ -512,9 +514,10 @@ class TeamMatchingService:
                 selectinload(Student.evidence).selectinload(Evidence.skills),
                 joinedload(Student.professional_profile),
             )
-            .filter(Student.id.notin_(excluded_student_ids))
-            .all()
         )
+        if excluded_student_ids:
+            candidates_query = candidates_query.filter(Student.id.notin_(excluded_student_ids))
+        candidates = candidates_query.all()
 
         forbidden_placeholders = {
             "alex rivera", "sarah chen", "marcus vance", "marcus young",
@@ -533,7 +536,7 @@ class TeamMatchingService:
 
             rec = cls.compute_candidate_match_for_team(
                 candidate=candidate,
-                team_requirements=team.required_skills,
+                team_requirements=team.required_skills if team else [],
                 covered_team_skill_ids=covered_team_skill_ids,
                 target_role=target_role,
                 target_domain=target_domain,

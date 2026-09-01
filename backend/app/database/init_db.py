@@ -430,46 +430,46 @@ DEMO_INDIAN_STUDENTS_DATA = [
         ],
     },
     {
-        "name": "Neha Patel",
-        "email": "neha.patel@skillbridge.edu",
-        "university": "SVNIT Surat (Computer Engg)",
-        "graduation_year": 2027,
+        "name": "Neha Sharma",
+        "email": "neha.sharma@skillbridge.edu",
+        "university": "Delhi Technological University (DTU)",
+        "graduation_year": 2026,
         "skills": [
-            {"name": "JavaScript", "level": "Advanced", "status": "verified"},
-            {"name": "TypeScript", "level": "Intermediate", "status": "verified"},
-            {"name": "React", "level": "Advanced", "status": "verified"},
-            {"name": "HTML", "level": "Advanced", "status": "verified"},
-            {"name": "CSS", "level": "Advanced", "status": "verified"},
-            {"name": "REST API", "level": "Intermediate", "status": "verified"},
-            {"name": "Git", "level": "Intermediate", "status": "verified"},
+            {"name": "Linux", "level": "Advanced", "status": "verified"},
+            {"name": "Git", "level": "Advanced", "status": "verified"},
+            {"name": "Docker", "level": "Advanced", "status": "verified"},
+            {"name": "CI/CD", "level": "Advanced", "status": "verified"},
+            {"name": "AWS", "level": "Advanced", "status": "verified"},
+            {"name": "Kubernetes", "level": "Intermediate", "status": "verified"},
+            {"name": "Cloud", "level": "Advanced", "status": "verified"},
         ],
         "evidence": [
             {
                 "type": "project",
-                "title": "HealthTrack India: Offline-First Rural Telemedicine & Vaccination Tracker",
-                "description": "Created progressive web app with IndexedDB offline sync and responsive UI for primary healthcare workers.",
-                "issuer": "SVNIT Surat Innotech",
+                "title": "Automated Multi-Cluster CI/CD Pipeline & Zero-Downtime Deployment Engine",
+                "description": "Constructed automated containerized deployment pipelines using Docker, GitHub Actions, Linux, and AWS ECS with automated health rollbacks.",
+                "issuer": "DTU DevOps Center of Excellence",
                 "status": "verified",
-                "url": "https://github.com/neha-patel/healthtrack-india",
-                "skills": ["React", "JavaScript", "CSS", "HTML", "REST API"],
-            },
-            {
-                "type": "competition",
-                "title": "Runner Up - Google Solution Challenge (India Regional)",
-                "description": "Developed maternal healthcare tracking web app addressing UN Sustainable Development Goals.",
-                "issuer": "Google Developer Student Clubs",
-                "status": "verified",
-                "url": "https://developers.google.com/community/gdsc-solution-challenge/neha-patel",
-                "skills": ["React", "TypeScript", "Git"],
+                "url": "https://github.com/neha-sharma/cloud-cicd-pipeline",
+                "skills": ["Linux", "Git", "Docker", "CI/CD", "AWS"],
             },
             {
                 "type": "certificate",
-                "title": "Modern React & TypeScript Full Guide",
-                "description": "Advanced frontend engineering certification on state management, hooks, and clean component patterns.",
-                "issuer": "Udemy / Academind",
+                "title": "AWS Certified Solutions Architect & SysOps Administrator",
+                "description": "Industry certification validating secure cloud architecture, automated VPC networking, and resilient container clustering.",
+                "issuer": "Amazon Web Services (AWS)",
                 "status": "verified",
-                "url": "https://udemy.com/certificate/UC-NEHA-REACT-2025",
-                "skills": ["React", "JavaScript", "TypeScript"],
+                "url": "https://aws.amazon.com/verification/AWS-NEHA-SHARMA-2025",
+                "skills": ["AWS", "Cloud", "Docker", "Linux"],
+            },
+            {
+                "type": "competition",
+                "title": "Winner - National Cloud & DevOps Infrastructure Hackathon 2025",
+                "description": "Designed resilient multi-region infrastructure as code with sub-minute deployment pipelines.",
+                "issuer": "Cloud Native Computing Foundation (CNCF Chapter)",
+                "status": "verified",
+                "url": "https://cncf.io/community/hackathons/neha-sharma-2025",
+                "skills": ["Docker", "CI/CD", "Linux", "Git"],
             },
         ],
     },
@@ -1085,96 +1085,8 @@ def init_db(db: Session) -> None:
 
                 existing_ev_titles.add(ev_item["title"].lower())
 
-    # 5. Additive Seeding of Demo Hackathon Teams
-    aarav = created_students.get("Aarav Sharma")
-    aditya = created_students.get("Aditya Mishra")
-    abhishek = created_students.get("Abhishek Mohanty")
-    pooja = created_students.get("Pooja Mishra")
-    rohan = created_students.get("Rohan Das")
-    ananya = created_students.get("Ananya Singh")
-
-    demo_teams = [
-        {
-            "name": "Bharat AI HealthTech",
-            "description": "Building edge-AI and multimodal diagnostics for community healthcare centers across India.",
-            "creator": aarav,
-            "members": [
-                {"student": aarav, "role": "ML & AI Lead", "status": "joined"},
-                {"student": pooja, "role": "GenAI & RAG Specialist", "status": "joined"},
-            ],
-            "required_skills": [
-                {"skill_name": "Python", "level": "Advanced"},
-                {"skill_name": "Deep Learning", "level": "Intermediate"},
-                {"skill_name": "React", "level": "Intermediate"},
-                {"skill_name": "Cloud & Docker", "level": "Intermediate"},
-            ],
-        },
-        {
-            "name": "KisanSetu AgriPlatform",
-            "description": "Decentralized fair-price agricultural marketplace with multilingual voice bidding for Indian farmers.",
-            "creator": aditya,
-            "members": [
-                {"student": aditya, "role": "Frontend & FullStack Lead", "status": "joined"},
-                {"student": ananya, "role": "NLP & Data Lead", "status": "joined"},
-                {"student": rohan, "role": "Backend Architect", "status": "joined"},
-            ],
-            "required_skills": [
-                {"skill_name": "React", "level": "Advanced"},
-                {"skill_name": "Node.js", "level": "Intermediate"},
-                {"skill_name": "Python", "level": "Intermediate"},
-                {"skill_name": "AWS", "level": "Intermediate"},
-            ],
-        },
-        {
-            "name": "FinBridge MicroBharat",
-            "description": "High-throughput micro-credit and automated subsidy dispatch engine for MSMEs.",
-            "creator": abhishek,
-            "members": [
-                {"student": abhishek, "role": "Java Enterprise Lead", "status": "joined"},
-            ],
-            "required_skills": [
-                {"skill_name": "Java", "level": "Advanced"},
-                {"skill_name": "Spring Boot", "level": "Intermediate"},
-                {"skill_name": "SQL", "level": "Intermediate"},
-                {"skill_name": "Docker", "level": "Intermediate"},
-            ],
-        },
-    ]
-
-    for t_info in demo_teams:
-        creator = t_info["creator"]
-        if not creator:
-            continue
-        existing_team = db.query(Team).filter(Team.name == t_info["name"]).first()
-        if not existing_team:
-            new_team = Team(
-                name=t_info["name"],
-                description=t_info["description"],
-                creator_id=creator.id,
-            )
-            db.add(new_team)
-            db.flush()
-
-            for m in t_info["members"]:
-                st_mem = m["student"]
-                if st_mem:
-                    db.add(TeamMember(
-                        team_id=new_team.id,
-                        student_id=st_mem.id,
-                        role=m["role"],
-                        status=m["status"],
-                        joined_at=datetime.now(timezone.utc),
-                    ))
-
-            for req in t_info["required_skills"]:
-                sk_obj = existing_skills.get(req["skill_name"].lower())
-                if sk_obj:
-                    db.add(TeamSkillRequirement(
-                        team_id=new_team.id,
-                        skill_id=sk_obj.id,
-                        minimum_proficiency=req["level"],
-                        required=True,
-                    ))
+    # 5. Teams start completely clean (0 teams) so users experience clean initial state
+    # No hardcoded demo teams seeded. Real persistent teams created by users via UI.
 
     # 6. Ensure legacy evidence rows have evidence_skills associations
     all_evidence = db.query(Evidence).options(joinedload(Evidence.skills)).all()
@@ -1197,7 +1109,7 @@ def init_db(db: Session) -> None:
         "sneha.das@skillbridge.edu": ("DevOps & Cloud Engineer", "DevOps & Cloud, Backend Development"),
         "kavya.sharma@skillbridge.edu": ("Cybersecurity Developer", "Backend Development, Security"),
         "rahul.kumar@skillbridge.edu": ("AI/ML Developer", "AI & Machine Learning, Robotics"),
-        "neha.patel@skillbridge.edu": ("Frontend Developer", "Frontend & UI"),
+        "neha.sharma@skillbridge.edu": ("DevOps Engineer", "DevOps & Cloud, Cloud Infrastructure"),
         "abhishek.mohanty@skillbridge.edu": ("Backend Developer", "Backend Development, Enterprise Java"),
         "pooja.mishra@skillbridge.edu": ("AI/ML Developer", "Generative AI, Large Language Models"),
         "saurav.behera@skillbridge.edu": ("Data/Database Specialist", "Data Systems & Databases, Data Analysis"),

@@ -821,17 +821,12 @@ def get_team_candidates(
     """
     Retrieve explainable candidate recommendations based on team skill gaps and complementarity.
     Supports role-specific recalculation via target_role or domain parameter.
+    If team_id is 0 or team does not exist, returns global role-matched candidate discovery.
     """
-    team = db.query(Team).filter(Team.id == team_id).first()
-    if not team:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Team with ID {team_id} not found.",
-        )
-
+    valid_team_id = team_id if team_id > 0 and db.query(Team).filter(Team.id == team_id).first() else 0
     return TeamMatchingService.get_candidate_recommendations_for_team(
         db=db,
-        team_id=team_id,
+        team_id=valid_team_id,
         target_role=target_role,
         target_domain=domain,
     )
