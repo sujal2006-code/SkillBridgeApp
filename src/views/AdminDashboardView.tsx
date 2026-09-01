@@ -56,66 +56,66 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <main className="max-w-[1280px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-24 md:pb-12 min-h-screen">
+    <main className="max-w-[1240px] mx-auto px-4 sm:px-6 py-6 pb-20 md:pb-10 min-h-screen font-['Inter']">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+            <span className="px-2 py-0.2 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
               Admin & Verification Console
             </span>
           </div>
-          <h1 className="font-['Hanken_Grotesk'] text-2xl sm:text-3xl md:text-[32px] font-bold text-[#191c1e] mt-1">
+          <h1 className="font-['Hanken_Grotesk'] text-xl sm:text-2xl font-bold text-[#191c1e] mt-0.5">
             Platform Overview
           </h1>
-          <p className="text-sm md:text-base text-slate-600 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5">
             Real-time telemetry, verification audit queue, and matching health.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleExport}
-            className="bg-[#00687a] text-white text-xs font-semibold px-4 py-2.5 rounded-lg hover:brightness-110 transition-all flex items-center gap-2 shadow-2xs"
+            className="bg-[#00687a] text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#00505e] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
-            <span className="material-symbols-outlined text-[18px]">download</span>
+            <span className="material-symbols-outlined text-[16px]">download</span>
             <span>Export Audit Report</span>
           </button>
           <button
             onClick={onLogout || (() => onNavigate('dashboard'))}
-            className="bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 border border-slate-200"
+            className="bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 border border-slate-200 cursor-pointer"
           >
-            <span className="material-symbols-outlined text-[18px]">logout</span>
+            <span className="material-symbols-outlined text-[16px]">logout</span>
             <span>Exit Admin</span>
           </button>
         </div>
       </div>
 
       {/* Stats Bento Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Stat 1: Total Students */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-4 right-4 opacity-15 text-slate-400 pointer-events-none">
-            <span className="material-symbols-outlined text-6xl">school</span>
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-slate-200 shadow-2xs relative overflow-hidden group hover:shadow-xs transition-shadow">
+          <div className="absolute top-3 right-3 opacity-15 text-slate-400 pointer-events-none">
+            <span className="material-symbols-outlined text-4xl">school</span>
           </div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
             Registered Students
           </p>
-          <p className="font-['Hanken_Grotesk'] text-3xl sm:text-4xl font-bold text-slate-900">
+          <p className="font-['Hanken_Grotesk'] text-2xl sm:text-3xl font-bold text-slate-900">
             {totalStudentsCount}
           </p>
-          <div className="mt-4 flex items-center gap-1.5 text-[#00687a] text-xs font-semibold">
-            <span className="material-symbols-outlined text-[16px]">verified_user</span>
+          <div className="mt-3 flex items-center gap-1 text-[#00687a] text-xs font-semibold">
+            <span className="material-symbols-outlined text-[15px]">verified_user</span>
             <span>Connected to database</span>
           </div>
         </div>
 
         {/* Stat 2: Active Internships */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-4 right-4 opacity-15 text-slate-400 pointer-events-none">
-            <span className="material-symbols-outlined text-6xl">business_center</span>
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-slate-200 shadow-2xs relative overflow-hidden group hover:shadow-xs transition-shadow">
+          <div className="absolute top-3 right-3 opacity-15 text-slate-400 pointer-events-none">
+            <span className="material-symbols-outlined text-4xl">business_center</span>
           </div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
             Active Internships
           </p>
           <p className="font-['Hanken_Grotesk'] text-3xl sm:text-4xl font-bold text-[#565e74]">

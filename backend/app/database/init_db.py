@@ -10,6 +10,7 @@ from app.models.match import Match
 from app.models.team import Team, TeamMember, TeamSkillRequirement, TeamInvitation
 from app.models.activity import Activity
 from app.models.otp import OTP
+from app.models.professional_role import StudentProfessionalProfile
 from app.core.security import hash_password
 
 
@@ -938,6 +939,21 @@ def init_db(db: Session) -> None:
     # 1. Additive table creation
     Base.metadata.create_all(bind=engine)
 
+    # 1b. Safe schema migrations for existing databases
+    try:
+        inspector = inspect(engine)
+        team_cols = [c["name"] for c in inspector.get_columns("teams")]
+        if "project_name" not in team_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE teams ADD COLUMN project_name VARCHAR;"))
+
+        req_cols = [c["name"] for c in inspector.get_columns("team_skill_requirements")]
+        if "domain" not in req_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE team_skill_requirements ADD COLUMN domain VARCHAR;"))
+    except Exception as e:
+        print(f"[INFO] Schema migration check: {e}")
+
     # 2. Non-destructive Additive Seeding of Centralized Canonical Skills Catalogue
     existing_skills_list = db.query(Skill).all()
     existing_skills = {s.name.lower(): s for s in existing_skills_list}
@@ -1169,5 +1185,45 @@ def init_db(db: Session) -> None:
                 sk = db.query(Skill).filter(Skill.id == ev.skill_id).first()
             if sk and sk not in ev.skills:
                 ev.skills.append(sk)
+
+    # 7. Seed or initialize professional profiles for students
+    demo_roles_map = {
+        "aarav.sharma@skillbridge.edu": ("AI/ML Developer", "AI & Machine Learning, Data Systems"),
+        "aditya.mishra@skillbridge.edu": ("Full Stack Developer", "Frontend & UI, Backend Development"),
+        "rohan.das@skillbridge.edu": ("Backend Developer", "Backend Development, Data Systems & Databases"),
+        "arjun.patel@skillbridge.edu": ("AI/ML Developer", "AI & Machine Learning, Computer Vision"),
+        "ananya.singh@skillbridge.edu": ("Data Scientist", "Data Systems & Databases, AI & Machine Learning"),
+        "priya.nair@skillbridge.edu": ("Frontend Developer", "Frontend & UI, Web Performance"),
+        "sneha.das@skillbridge.edu": ("DevOps & Cloud Engineer", "DevOps & Cloud, Backend Development"),
+        "kavya.sharma@skillbridge.edu": ("Cybersecurity Developer", "Backend Development, Security"),
+        "rahul.kumar@skillbridge.edu": ("AI/ML Developer", "AI & Machine Learning, Robotics"),
+        "neha.patel@skillbridge.edu": ("Frontend Developer", "Frontend & UI"),
+        "abhishek.mohanty@skillbridge.edu": ("Backend Developer", "Backend Development, Enterprise Java"),
+        "pooja.mishra@skillbridge.edu": ("AI/ML Developer", "Generative AI, Large Language Models"),
+        "saurav.behera@skillbridge.edu": ("Data/Database Specialist", "Data Systems & Databases, Data Analysis"),
+        "ishita.gupta@skillbridge.edu": ("Backend Developer", "Algorithms, Systems Engineering"),
+        "vivek.reddy@skillbridge.edu": ("DevOps & Cloud Engineer", "DevOps & Cloud, Microservices"),
+    }
+
+    for st in db.query(Student).all():
+        existing_prof = db.query(StudentProfessionalProfile).filter(StudentProfessionalProfile.student_id == st.id).first()
+        if not existing_prof:
+            default_role, default_specs = demo_roles_map.get(st.email.lower(), ("Full Stack Developer", "Frontend & UI, Backend Development"))
+            db.add(StudentProfessionalProfile(
+                student_id=st.id,
+                primary_role=default_role,
+                secondary_specializations=default_specs,
+                bio=f"Verified student at {st.university}.",
+            ))
+
+    # Update existing demo teams with project names if missing
+    for t in db.query(Team).all():
+        if not t.project_name:
+            if "AI" in t.name or "NLP" in t.name or "Vision" in t.name:
+                t.project_name = "AI Student Platform"
+            elif "Transit" in t.name or "Bharat" in t.name or "FinBridge" in t.name:
+                t.project_name = "Rural FinTech & Transport Engine"
+            else:
+                t.project_name = f"{t.name} Collaborative Initiative"
 
     db.commit()

@@ -125,27 +125,27 @@ export const PassportView: React.FC<PassportViewProps> = ({
   const pendingEvidenceCount = evidenceList.filter(e => e.verificationStatus === 'pending').length;
 
   return (
-    <main className="max-w-[1280px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-24 md:pb-12 min-h-screen">
+    <main className="max-w-[1240px] mx-auto px-4 sm:px-6 py-6 pb-20 md:pb-10 min-h-screen font-['Inter']">
       {/* Header */}
-      <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <header className="mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-cyan-50 text-[#00687a] border border-cyan-200">
+            <span className="px-2 py-0.2 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-50 text-[#00687a] border border-cyan-200">
               Verified Digital Passport
             </span>
           </div>
-          <h1 className="font-['Hanken_Grotesk'] text-2xl sm:text-3xl md:text-[32px] font-bold text-[#191c1e] tracking-tight">
+          <h1 className="font-['Hanken_Grotesk'] text-xl sm:text-2xl font-bold text-[#191c1e] tracking-tight">
             Your Digital Skill Passport
           </h1>
-          <p className="text-sm md:text-base text-slate-600 mt-1 max-w-2xl leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-600 mt-0.5 max-w-2xl leading-relaxed">
             Manage and showcase your verified competencies. Every skill is backed by verified coursework, projects, competitions, and credentials.
           </p>
         </div>
         <button
           onClick={() => onNavigate('add-evidence')}
-          className="self-start md:self-auto bg-[#00687a] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:brightness-110 transition-all shadow-xs flex items-center gap-2"
+          className="self-start md:self-auto bg-[#00687a] hover:bg-[#00505e] text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
         >
-          <span className="material-symbols-outlined text-[18px]">add</span>
+          <span className="material-symbols-outlined text-[16px]">add</span>
           <span>Add New Evidence</span>
         </button>
       </header>
@@ -274,35 +274,35 @@ export const PassportView: React.FC<PassportViewProps> = ({
                     <span className="text-xs font-semibold text-slate-500">{categorySkills.length} Verified</span>
                   </h2>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {categorySkills.map((skill) => (
                       <div
                         key={skill.id}
                         onClick={() => handleCardClick(skill)}
-                        className="bg-white border border-slate-200 rounded-xl p-5 relative hover:shadow-lg hover:border-slate-300 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+                        className="bg-white border border-slate-200 rounded-xl p-4 relative hover:shadow-sm hover:border-slate-300 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
                       >
                         {/* Top right Verified badge */}
-                        <div className="absolute top-4 right-4 flex items-center gap-1 bg-[#f2f4f6] py-1 px-2.5 rounded-full border border-slate-200 shadow-2xs">
-                          <span className="material-symbols-outlined text-[15px] text-[#10b981] material-symbols-fill">
+                        <div className="absolute top-3 right-3 flex items-center gap-1 bg-[#f2f4f6] py-0.5 px-2 rounded-full border border-slate-200 shadow-2xs">
+                          <span className="material-symbols-outlined text-[13px] text-[#10b981] material-symbols-fill">
                             verified
                           </span>
-                          <span className="text-[11px] font-medium text-slate-600">Verified</span>
+                          <span className="text-[10px] font-medium text-slate-600">Verified</span>
                         </div>
 
                         {/* Progress Ring & Skill Info */}
-                        <div className="flex gap-4 items-center mt-3">
+                        <div className="flex gap-3 items-center mt-2">
                           <CircularProgress
                             percentage={skill.percentage}
-                            size={64}
-                            strokeWidth={4.5}
+                            size={48}
+                            strokeWidth={3.5}
                             color="#00687a"
-                            fontSize="text-sm font-bold"
+                            fontSize="text-xs font-bold"
                           />
                           <div>
-                            <h3 className="font-['Hanken_Grotesk'] text-lg font-bold text-[#191c1e] group-hover:text-[#00687a] transition-colors">
+                            <h3 className="font-['Hanken_Grotesk'] text-base font-bold text-[#191c1e] group-hover:text-[#00687a] transition-colors">
                               {skill.name}
                             </h3>
-                            <span className="inline-block bg-[#1e293b] text-white text-[11px] font-medium px-2 py-0.5 rounded mt-1">
+                            <span className="inline-block bg-[#1e293b] text-white text-[10px] font-medium px-1.5 py-0.2 rounded mt-0.5">
                               {skill.level} Proficiency
                             </span>
                           </div>

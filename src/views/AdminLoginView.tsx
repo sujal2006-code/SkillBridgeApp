@@ -38,20 +38,20 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
   };
 
   return (
-    <main className="min-h-[80vh] flex items-center justify-center p-4 md:p-8 font-['Inter']">
-      <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 shadow-xl p-8 relative overflow-hidden">
+    <main className="min-h-[75vh] flex items-center justify-center p-4 font-['Inter']">
+      <div className="max-w-sm sm:max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-lg p-5 sm:p-7 relative overflow-hidden">
         {/* Subtle Top Accent */}
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-purple-600 to-[#00687a]"></div>
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-600 to-[#00687a]"></div>
 
         {/* Lock / Shield Icon */}
-        <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-200 shadow-xs mb-6 mt-2">
-          <span className="material-symbols-outlined text-3xl material-symbols-fill">admin_panel_settings</span>
+        <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-200 shadow-2xs mb-4 mt-1">
+          <span className="material-symbols-outlined text-2xl material-symbols-fill">admin_panel_settings</span>
         </div>
 
-        <h1 className="font-['Hanken_Grotesk'] text-2xl font-bold text-slate-900 tracking-tight mb-1">
+        <h1 className="font-['Hanken_Grotesk'] text-xl font-bold text-slate-900 tracking-tight mb-0.5">
           Faculty & Admin Portal
         </h1>
-        <p className="text-xs text-slate-500 mb-6">
+        <p className="text-xs text-slate-500 mb-4">
           Authorized verification access for artifact evaluation and skill governance.
         </p>
 

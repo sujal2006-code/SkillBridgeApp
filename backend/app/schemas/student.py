@@ -36,6 +36,9 @@ class StudentLoginRequest(BaseModel):
     name: str
     password: str
     confirm_password: Optional[str] = None
+    email: Optional[str] = None
+    university: Optional[str] = None
+    graduation_year: Optional[int] = None
     mode: Optional[str] = "auto"  # 'login' | 'register' | 'auto'
 
 

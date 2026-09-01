@@ -12,6 +12,7 @@ import {
   ApiTeamCandidateRecommendation,
   ApiActivity,
   ApiStudentLoginResponse,
+  ApiTeam,
 } from './types';
 import {
   studentsApi,
@@ -34,6 +35,7 @@ import { PassportView } from './views/PassportView';
 import { StudentDashboardView } from './views/StudentDashboardView';
 import { InternshipsView } from './views/InternshipsView';
 import { TeamBuilderView } from './views/TeamBuilderView';
+import { MyTeamView } from './views/MyTeamView';
 import { AddEvidenceView } from './views/AddEvidenceView';
 import { AdminDashboardView } from './views/AdminDashboardView';
 import { AdminLoginView } from './views/AdminLoginView';
@@ -57,7 +59,7 @@ const AVATAR_LIST = [
 
 const VALID_SCREENS: ScreenType[] = [
   'login', 'landing', 'passport', 'dashboard',
-  'internships', 'team-builder', 'add-evidence', 'admin', 'admin-login'
+  'internships', 'team-builder', 'my-team', 'add-evidence', 'admin', 'admin-login'
 ];
 
 export default function App() {
@@ -82,6 +84,8 @@ export default function App() {
     return localStorage.getItem('skillbridge_admin_token');
   });
   const [activeTeamId, setActiveTeamId] = useState<number | null>(null);
+  const [activeTeam, setActiveTeam] = useState<ApiTeam | null>(null);
+  const [teamRoleFilter, setTeamRoleFilter] = useState<string>('All');
   
   // App state backed by live FastAPI backend & Neon PostgreSQL
   const [student, setStudent] = useState<ApiStudent | null>(null);
@@ -297,8 +301,8 @@ export default function App() {
       return {
         id: `candidate-${rec.candidate_id}`,
         name: rec.candidate_name,
-        role: rec.role_suggestion,
-        level: 'Intermediate',
+        role: rec.professional_role || rec.role_suggestion,
+        level: rec.overall_proficiency || 'Intermediate',
         avatar,
         matchPercentage: Math.round(rec.match_score),
         aiInsight: rec.explanation,
@@ -310,6 +314,12 @@ export default function App() {
         education: rec.university || 'SkillBridge Academic Network',
         location: 'Verified Student Network',
         matchedSkillsDetails: rec.matched_skills,
+        professionalRole: rec.professional_role,
+        verifiedDomains: rec.verified_domains,
+        targetRole: rec.target_role,
+        evidenceBreakdown: rec.evidence_breakdown,
+        coreSkillsFulfilled: rec.core_skills_fulfilled || [],
+        coreSkillsMissing: rec.core_skills_missing || [],
       };
     });
     setCandidates(mapped);
@@ -408,18 +418,24 @@ export default function App() {
 
       // 5. Fetch Team Builder Teams & Candidate Recommendations from Backend DB
       try {
-        let existingTeams = await teamsApi.getTeams();
-        let currentTeam = existingTeams.length > 0 ? existingTeams[0] : null;
+        let userTeams = await teamsApi.getMyTeams();
+        let currentTeam = userTeams && userTeams.length > 0 ? userTeams[0] : null;
+        if (!currentTeam) {
+          let existingTeams = await teamsApi.getTeams();
+          currentTeam = existingTeams && existingTeams.length > 0 ? existingTeams[0] : null;
+        }
 
         if (!currentTeam) {
           currentTeam = await teamsApi.createTeam({
-            name: 'AI & UX Research Platform',
-            description: 'Multidisciplinary AI, UI/UX, and Backend engineering team.',
+            name: 'Hex Bridge',
+            project_name: 'AI & Full Stack Collaborative Platform',
+            description: 'Multidisciplinary engineering team for hackathons and projects.',
             creator_id: studentData.id,
-            required_skill_ids: [1, 2, 5],
+            required_domains: ['Frontend', 'Backend', 'Database', 'AI/ML', 'UI/UX'],
           });
         }
 
+        setActiveTeam(currentTeam);
         setActiveTeamId(currentTeam.id);
 
         const invitedIds = new Set<number>();
@@ -767,12 +783,34 @@ export default function App() {
           <TeamBuilderView
             studentName={student?.name || 'Student'}
             candidates={candidates}
+            teamId={activeTeamId || 1}
+            activeTeam={activeTeam}
+            initialRoleFilter={teamRoleFilter}
             isLoading={isLoading}
             error={apiError}
             onRetry={() => loadBackendData()}
             onInviteCandidate={handleInviteCandidate}
             onOpenMatchModal={setSelectedMatchItem}
             onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'my-team' && (
+          <MyTeamView
+            studentName={student?.name || 'Student'}
+            studentId={student?.id || activeStudentId || 1}
+            onNavigate={handleNavigate}
+            onSelectMissingDomain={(domain) => {
+              const dLower = domain.toLowerCase();
+              if (dLower.includes('frontend')) setTeamRoleFilter('Frontend Developer');
+              else if (dLower.includes('backend')) setTeamRoleFilter('Backend Developer');
+              else if (dLower.includes('ai') || dLower.includes('ml')) setTeamRoleFilter('AI/ML Developer');
+              else if (dLower.includes('data') || dLower.includes('sql') || dLower.includes('database')) setTeamRoleFilter('Database Specialist');
+              else if (dLower.includes('ui') || dLower.includes('ux') || dLower.includes('design')) setTeamRoleFilter('UI/UX Designer');
+              else if (dLower.includes('devops') || dLower.includes('cloud')) setTeamRoleFilter('DevOps Engineer');
+              else if (dLower.includes('full stack')) setTeamRoleFilter('Full Stack Developer');
+              else setTeamRoleFilter('All');
+            }}
           />
         )}
 

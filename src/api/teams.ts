@@ -1,11 +1,14 @@
 import { apiClient } from './client';
-import { ApiTeam, ApiTeamCandidateRecommendation, ApiTeamInvitation } from '../types';
+import { ApiTeam, ApiTeamCandidateRecommendation, ApiTeamInvitation, ApiTeamSkillRequirement } from '../types';
 
 export interface CreateTeamPayload {
   name: string;
+  project_name?: string;
   description?: string;
   creator_id?: number;
   required_skill_ids?: number[];
+  required_domains?: string[];
+  required_skills?: Partial<ApiTeamSkillRequirement>[];
 }
 
 export interface AddTeamMemberPayload {
@@ -29,6 +32,13 @@ export const teamsApi = {
   },
 
   /**
+   * Get teams where the current user is Leader or joined Member
+   */
+  getMyTeams: () => {
+    return apiClient.get<ApiTeam[]>('/api/teams/my');
+  },
+
+  /**
    * Create a new project team
    */
   createTeam: (payload: CreateTeamPayload) => {
@@ -40,6 +50,13 @@ export const teamsApi = {
    */
   getTeam: (teamId: number) => {
     return apiClient.get<ApiTeam>(`/api/teams/${teamId}`);
+  },
+
+  /**
+   * Update team skill requirements (leader only)
+   */
+  updateTeamRequirements: (teamId: number, requirements: Partial<ApiTeamSkillRequirement>[]) => {
+    return apiClient.put<ApiTeam>(`/api/teams/${teamId}/requirements`, requirements);
   },
 
   /**
@@ -78,9 +95,13 @@ export const teamsApi = {
   },
 
   /**
-   * Get explainable candidate recommendations for a team based on real DB data and complementarity
+   * Get explainable candidate recommendations for a team with role-specific gap matching
    */
-  getTeamCandidates: (teamId: number) => {
-    return apiClient.get<ApiTeamCandidateRecommendation[]>(`/api/teams/${teamId}/candidates`);
+  getTeamCandidates: (teamId: number, targetRole?: string, domain?: string) => {
+    const params = new URLSearchParams();
+    if (targetRole && targetRole !== 'All') params.append('target_role', targetRole);
+    if (domain && domain !== 'All') params.append('domain', domain);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiClient.get<ApiTeamCandidateRecommendation[]>(`/api/teams/${teamId}/candidates${qs}`);
   },
 };

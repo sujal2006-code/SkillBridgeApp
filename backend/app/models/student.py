@@ -21,3 +21,5 @@ class Student(Base):
     skills = relationship("StudentSkill", back_populates="student", cascade="all, delete-orphan")
     evidence = relationship("Evidence", back_populates="student", cascade="all, delete-orphan")
     matches = relationship("Match", back_populates="student", cascade="all, delete-orphan")
+    professional_profile = relationship("StudentProfessionalProfile", back_populates="student", uselist=False, cascade="all, delete-orphan")
+    team_memberships = relationship("TeamMember", back_populates="student", cascade="all, delete-orphan")

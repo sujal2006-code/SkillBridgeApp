@@ -7,6 +7,7 @@ from .match import Match
 from .team import Team, TeamMember, TeamSkillRequirement, TeamInvitation
 from .activity import Activity
 from .otp import OTP
+from .professional_role import StudentProfessionalProfile
 
 __all__ = [
     "Student",
@@ -23,4 +24,5 @@ __all__ = [
     "TeamInvitation",
     "Activity",
     "OTP",
+    "StudentProfessionalProfile",
 ]

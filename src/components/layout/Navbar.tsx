@@ -54,7 +54,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       await teamsApi.acceptInvitation(invitationId);
       setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
       setUnreadCount((prev) => Math.max(0, prev - 1));
+      setShowNotifications(false);
       if (onInvitationAction) onInvitationAction();
+      onNavigate('my-team');
     } catch (err: any) {
       alert(err.message || 'Failed to accept invitation.');
     } finally {
@@ -85,17 +87,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="bg-white border-b border-[#e0e3e5] sticky top-0 z-40 shadow-xs font-['Inter']">
-      <div className="max-w-[1280px] mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-[1240px] mx-auto px-3 sm:px-6 h-13 flex items-center justify-between">
         {/* Brand Logo */}
         <div 
           onClick={() => onNavigate('dashboard')}
-          className="flex items-center gap-2.5 cursor-pointer group"
+          className="flex items-center gap-2 cursor-pointer group"
           id="nav-brand-logo"
         >
-          <div className="w-9 h-9 rounded-xl bg-[#00687a] text-white flex items-center justify-center font-bold text-sm shadow-xs group-hover:scale-105 transition-transform">
-            <span className="material-symbols-outlined text-[22px] material-symbols-fill">widgets</span>
+          <div className="w-7.5 h-7.5 rounded-lg bg-[#00687a] text-white flex items-center justify-center font-bold text-xs shadow-xs group-hover:scale-105 transition-transform">
+            <span className="material-symbols-outlined text-[18px] material-symbols-fill">widgets</span>
           </div>
-          <span className="font-['Hanken_Grotesk'] text-xl font-bold text-[#00687a] tracking-tight">
+          <span className="font-['Hanken_Grotesk'] text-base font-bold text-[#00687a] tracking-tight">
             SkillBridge
           </span>
         </div>
@@ -104,7 +106,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="hidden lg:flex items-center gap-1">
           <button
             onClick={() => onNavigate('landing')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
               currentScreen === 'landing' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -114,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('dashboard')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
               currentScreen === 'dashboard' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -124,7 +126,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('passport')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
               currentScreen === 'passport' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -134,7 +136,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('internships')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
               currentScreen === 'internships' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -144,7 +146,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => onNavigate('team-builder')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
               currentScreen === 'team-builder' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
@@ -153,15 +155,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             Team Builder
           </button>
           <button
+            onClick={() => onNavigate('my-team')}
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+              currentScreen === 'my-team' 
+                ? 'text-[#00687a] bg-[#00687a]/10' 
+                : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
+            }`}
+          >
+            My Team
+          </button>
+          <button
             onClick={() => onNavigate('add-evidence')}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
               currentScreen === 'add-evidence' 
                 ? 'text-[#00687a] bg-[#00687a]/10' 
                 : 'text-slate-600 hover:text-[#00687a] hover:bg-slate-50'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">add_circle</span>
-            Add Evidence
+            <span className="material-symbols-outlined text-[15px]">add_circle</span>
+            <span>Add Evidence</span>
           </button>
         </nav>
 
@@ -312,6 +324,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <span className="material-symbols-outlined text-[16px] text-[#00687a]">badge</span>
                     <span>View My Passport</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      onNavigate('my-team');
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium flex items-center gap-2 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px] text-[#00687a]">diversity_3</span>
+                    <span>My Project Team</span>
                   </button>
                   {onSwitchStudent && (
                     <button

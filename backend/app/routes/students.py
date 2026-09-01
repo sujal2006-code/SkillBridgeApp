@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database.session import get_db
 from app.models.student import Student
-from app.models.skill import StudentSkill
+from app.models.skill import StudentSkill, Skill
 from app.models.evidence import Evidence
+from app.models.internship import Internship
+from app.models.team import Team
 from app.schemas.student import (
     StudentCreate,
     StudentRead,
@@ -17,6 +19,8 @@ from app.schemas.student import (
     StudentLoginResponse,
     StudentUpdateStateRequest,
 )
+from app.schemas.team import StudentProfessionalProfileRead, StudentProfessionalProfileUpdate
+from app.services.professional_role_service import ProfessionalRoleService
 from app.core.security import (
     hash_password,
     verify_password,
@@ -206,6 +210,76 @@ def get_my_profile(
             detail="Authenticated student record not found in database.",
         )
     return student
+
+
+@router.get("/platform-stats", summary="Get genuine platform statistics calculated from real database records")
+def get_platform_stats(db: Session = Depends(get_db)):
+    """Calculate and return real database metrics for landing page transparency."""
+    total_students = db.query(Student).count()
+    verified_skills_count = (
+        db.query(StudentSkill)
+        .filter(StudentSkill.verification_status == "verified")
+        .count()
+    )
+    total_skills_catalog = db.query(Skill).count()
+    total_internships = db.query(Internship).count()
+    total_teams = db.query(Team).count()
+
+    return {
+        "verified_students_count": total_students,
+        "verified_skills_count": verified_skills_count,
+        "skills_catalog_count": total_skills_catalog,
+        "active_opportunities_count": total_internships,
+        "active_teams_count": total_teams,
+        "transparency_notice": "Real-time verified metrics calculated from live database records.",
+    }
+
+
+@router.get("/me/professional-role", response_model=StudentProfessionalProfileRead, summary="Get authenticated student's professional identity")
+def get_my_professional_role(
+    auth_student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+) -> StudentProfessionalProfileRead:
+    """Retrieve authenticated student's professional role, domain proficiencies, and supported roles."""
+    data = ProfessionalRoleService.get_professional_identity(db, auth_student_id)
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found.",
+        )
+    return StudentProfessionalProfileRead(**data)
+
+
+@router.put("/me/professional-role", response_model=StudentProfessionalProfileRead, summary="Update authenticated student's professional role")
+def update_my_professional_role(
+    payload: StudentProfessionalProfileUpdate,
+    auth_student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+) -> StudentProfessionalProfileRead:
+    """Update student's primary role and secondary specializations with evidence validation."""
+    data = ProfessionalRoleService.update_professional_identity(
+        db=db,
+        student_id=auth_student_id,
+        primary_role=payload.primary_role,
+        secondary_specializations=payload.secondary_specializations,
+        bio=payload.bio,
+    )
+    return StudentProfessionalProfileRead(**data)
+
+
+@router.get("/{student_id}/professional-role", response_model=StudentProfessionalProfileRead, summary="Get public professional identity of student")
+def get_student_professional_role(
+    student_id: int,
+    db: Session = Depends(get_db),
+) -> StudentProfessionalProfileRead:
+    """Retrieve public professional identity and domain proficiencies for any student."""
+    data = ProfessionalRoleService.get_professional_identity(db, student_id)
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found.",
+        )
+    return StudentProfessionalProfileRead(**data)
 
 
 @router.patch("/me/state", response_model=StudentRead, summary="Persist authenticated student navigation & workflow state")

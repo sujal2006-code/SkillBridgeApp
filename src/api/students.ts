@@ -71,6 +71,34 @@ export const studentsApi = {
       last_state_json: lastStateJson,
     });
   },
+
+  /**
+   * Retrieve authenticated student's professional identity and domain proficiencies
+   */
+  getMyProfessionalRole: () => {
+    return apiClient.get<import('../types').ApiProfessionalProfile>('/api/students/me/professional-role');
+  },
+
+  /**
+   * Update student's primary professional role and secondary specializations
+   */
+  updateMyProfessionalRole: (payload: { primary_role: string; secondary_specializations?: string[]; bio?: string }) => {
+    return apiClient.put<import('../types').ApiProfessionalProfile>('/api/students/me/professional-role', payload);
+  },
+
+  /**
+   * Get public professional identity of student
+   */
+  getStudentProfessionalRole: (studentId: number) => {
+    return apiClient.get<import('../types').ApiProfessionalProfile>(`/api/students/${studentId}/professional-role`);
+  },
+
+  /**
+   * Get real platform metrics calculated live from database records
+   */
+  getPlatformStats: () => {
+    return apiClient.get<import('../types').ApiPlatformStats>('/api/students/platform-stats');
+  },
 };
 
 

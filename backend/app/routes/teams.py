@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -6,17 +6,22 @@ from app.database.session import get_db
 from app.models.team import Team, TeamMember, TeamSkillRequirement, TeamInvitation
 from app.models.student import Student
 from app.models.skill import Skill, StudentSkill
+from app.models.evidence import Evidence
 from app.models.activity import Activity
+from app.models.professional_role import StudentProfessionalProfile
 from app.schemas.team import (
     TeamCreate,
     TeamRead,
     TeamMemberCreate,
     TeamMemberRead,
+    TeamSkillRequirementCreate,
+    TeamSkillRequirementRead,
     TeamInvitationCreate,
     TeamInvitationRead,
     TeamCandidateRecommendation,
 )
-from app.services.team_matching import TeamMatchingService
+from app.services.team_matching import TeamMatchingService, DOMAIN_CATEGORIES, normalize_skill_name
+from app.services.professional_role_service import ProfessionalRoleService
 from app.core.security import get_current_student_id, get_optional_student_id
 
 router = APIRouter(prefix="/teams", tags=["Team Builder"])
@@ -27,13 +32,48 @@ MAX_TEAM_MEMBERS = 6
 def _map_team_to_schema(team: Team, db: Session) -> TeamRead:
     """Helper to convert Team model to rich TeamRead schema with members, gaps, and coverage."""
     creator_name = team.creator.name if team.creator else None
-    
-    mapped_members = []
-    joined_student_ids = []
+    project_name = team.project_name or team.description or "Multidisciplinary Project Platform"
+
+    mapped_members: List[TeamMemberRead] = []
+    joined_student_ids: List[int] = []
+
     for m in team.members:
-        member_name = m.student.name if m.student else None
-        if m.status == "joined":
-            joined_student_ids.append(m.student_id)
+        member_student = m.student
+        member_name = member_student.name if member_student else None
+        
+        prof_role = "Technical Contributor"
+        prof_level = "Intermediate"
+        domains: List[str] = []
+        verified_skills: List[str] = []
+        evidence_items: List[str] = []
+
+        if member_student:
+            if m.status == "joined":
+                joined_student_ids.append(m.student_id)
+
+            # Fetch member's professional profile
+            prof = member_student.professional_profile
+            if not prof:
+                prof = db.query(StudentProfessionalProfile).filter(StudentProfessionalProfile.student_id == member_student.id).first()
+            if prof:
+                prof_role = prof.primary_role
+
+            # Calculate verified skills and domain proficiencies
+            for ss in member_student.skills:
+                if ss.verification_status == "verified" and ss.skill:
+                    verified_skills.append(ss.skill.name)
+                    if ss.proficiency_level == "Advanced":
+                        prof_level = "Advanced"
+
+            # Domain breakdown
+            domain_evals = ProfessionalRoleService.calculate_student_domain_proficiencies(member_student)
+            domains = [d["domain"] for d in domain_evals if d["is_supported"]]
+
+            # Evidence artifacts
+            for ev in member_student.evidence:
+                if ev.verification_status == "verified":
+                    evidence_items.append(f"{ev.title} ({ev.evidence_type.title()})")
+
         mapped_members.append(
             TeamMemberRead(
                 id=m.id,
@@ -44,6 +84,11 @@ def _map_team_to_schema(team: Team, db: Session) -> TeamRead:
                 joined_at=m.joined_at,
                 created_at=m.created_at,
                 student_name=member_name,
+                professional_role=prof_role,
+                proficiency=prof_level,
+                domains=domains,
+                verified_skills=verified_skills,
+                evidence_items=evidence_items[:4],
             )
         )
 
@@ -65,19 +110,28 @@ def _map_team_to_schema(team: Team, db: Session) -> TeamRead:
 
     mapped_requirements = []
     missing_skills = []
+    domain_coverage: Dict[str, bool] = {}
+
     for req in team.required_skills:
         skill_name = req.skill.name if req.skill else f"Skill #{req.skill_id}"
-        if skill_name not in covered_skills:
+        req_domain = req.domain or TeamMatchingService.get_skill_domain(skill_name)
+        is_covered = skill_name in covered_skills
+        if not is_covered:
             missing_skills.append(skill_name)
+
+        if req_domain:
+            domain_coverage[req_domain] = domain_coverage.get(req_domain, False) or is_covered
+
         mapped_requirements.append(
-            {
-                "id": req.id,
-                "team_id": req.team_id,
-                "skill_id": req.skill_id,
-                "minimum_proficiency": req.minimum_proficiency,
-                "required": req.required,
-                "skill_name": skill_name,
-            }
+            TeamSkillRequirementRead(
+                id=req.id,
+                team_id=req.team_id,
+                skill_id=req.skill_id,
+                skill_name=skill_name,
+                domain=req_domain,
+                minimum_proficiency=req.minimum_proficiency,
+                required=req.required,
+            )
         )
 
     # Map invitations
@@ -88,6 +142,7 @@ def _map_team_to_schema(team: Team, db: Session) -> TeamRead:
                 id=inv.id,
                 team_id=inv.team_id,
                 team_name=team.name,
+                project_name=project_name,
                 sender_id=inv.sender_id,
                 sender_name=inv.sender.name if inv.sender else None,
                 recipient_id=inv.recipient_id,
@@ -100,9 +155,13 @@ def _map_team_to_schema(team: Team, db: Session) -> TeamRead:
             )
         )
 
+    total_reqs = len(team.required_skills)
+    coverage_pct = round((len(covered_skills) / max(1, total_reqs)) * 100.0, 1) if total_reqs > 0 else 100.0
+
     return TeamRead(
         id=team.id,
         name=team.name,
+        project_name=project_name,
         description=team.description,
         creator_id=team.creator_id,
         creator_name=creator_name,
@@ -113,6 +172,8 @@ def _map_team_to_schema(team: Team, db: Session) -> TeamRead:
         total_members_count=len([m for m in team.members if m.status == "joined"]),
         skills_covered=sorted(list(covered_skills)),
         skills_missing=missing_skills,
+        team_coverage_percentage=min(100.0, coverage_pct),
+        domain_coverage=domain_coverage,
     )
 
 
@@ -123,7 +184,9 @@ def list_teams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -
         db.query(Team)
         .options(
             joinedload(Team.creator),
-            selectinload(Team.members).joinedload(TeamMember.student),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.skills).joinedload(StudentSkill.skill),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.evidence),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.professional_profile),
             selectinload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
             selectinload(Team.invitations).joinedload(TeamInvitation.sender),
             selectinload(Team.invitations).joinedload(TeamInvitation.recipient),
@@ -136,14 +199,43 @@ def list_teams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -
     return [_map_team_to_schema(t, db) for t in teams]
 
 
+@router.get("/my", response_model=List[TeamRead], summary="Get teams for authenticated student")
+def get_my_teams(
+    auth_student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+) -> List[TeamRead]:
+    """Retrieve teams where the current student is either Team Leader (creator) or joined Member."""
+    teams = (
+        db.query(Team)
+        .join(TeamMember, Team.id == TeamMember.team_id)
+        .options(
+            joinedload(Team.creator),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.skills).joinedload(StudentSkill.skill),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.evidence),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.professional_profile),
+            selectinload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
+            selectinload(Team.invitations).joinedload(TeamInvitation.sender),
+            selectinload(Team.invitations).joinedload(TeamInvitation.recipient),
+        )
+        .filter(
+            (Team.creator_id == auth_student_id) |
+            ((TeamMember.student_id == auth_student_id) & (TeamMember.status == "joined"))
+        )
+        .distinct()
+        .order_by(Team.created_at.desc())
+        .all()
+    )
+    return [_map_team_to_schema(t, db) for t in teams]
+
+
 @router.post("", response_model=TeamRead, status_code=status.HTTP_201_CREATED, summary="Create a new team")
 def create_team(
     team_in: TeamCreate,
     auth_student_id: Optional[int] = Depends(get_optional_student_id),
     db: Session = Depends(get_db),
 ) -> TeamRead:
-    """Create a new project team with initial skill requirements and creator as lead."""
-    effective_creator_id = auth_student_id if auth_student_id is not None else team_in.creator_id
+    """Create a new project team with required capabilities and creator as Team Leader."""
+    effective_creator_id = auth_student_id if auth_student_id is not None else (team_in.creator_id or 1)
     creator = db.query(Student).filter(Student.id == effective_creator_id).first()
     if not creator:
         raise HTTPException(
@@ -153,51 +245,103 @@ def create_team(
 
     # 1. Create team record
     team = Team(
-        name=team_in.name,
-        description=team_in.description,
+        name=team_in.name.strip(),
+        project_name=team_in.project_name.strip() if team_in.project_name else team_in.name.strip(),
+        description=team_in.description.strip() if team_in.description else None,
         creator_id=effective_creator_id,
     )
     db.add(team)
     db.flush()
 
-    # 2. Add creator as first team member (Lead/Owner)
+    # 2. Add creator as Team Leader
     creator_member = TeamMember(
         team_id=team.id,
         student_id=effective_creator_id,
-        role="Team Owner & Lead",
+        role="Team Leader",
         status="joined",
         joined_at=datetime.now(timezone.utc),
     )
     db.add(creator_member)
 
-    # 3. Add skill requirements
+    # 3. Add skill requirements from explicit items, IDs, or domain keywords
+    added_skill_ids = set()
+
     if team_in.required_skills:
         for req in team_in.required_skills:
-            db.add(
-                TeamSkillRequirement(
-                    team_id=team.id,
-                    skill_id=req.skill_id,
-                    minimum_proficiency=req.minimum_proficiency,
-                    required=req.required,
+            sk_id = req.skill_id
+            if not sk_id and req.skill_name:
+                sk = db.query(Skill).filter(Skill.name.ilike(req.skill_name.strip())).first()
+                if not sk:
+                    sk = Skill(name=req.skill_name.strip(), category=req.domain or "Technical", description=f"Skill in {req.skill_name}")
+                    db.add(sk)
+                    db.flush()
+                sk_id = sk.id
+            
+            if sk_id and sk_id not in added_skill_ids:
+                added_skill_ids.add(sk_id)
+                db.add(
+                    TeamSkillRequirement(
+                        team_id=team.id,
+                        skill_id=sk_id,
+                        domain=req.domain,
+                        minimum_proficiency=req.minimum_proficiency or "Intermediate",
+                        required=req.required,
+                    )
                 )
-            )
     elif team_in.required_skill_ids:
         for skill_id in team_in.required_skill_ids:
-            db.add(
-                TeamSkillRequirement(
-                    team_id=team.id,
-                    skill_id=skill_id,
-                    minimum_proficiency="Intermediate",
-                    required=True,
+            if skill_id not in added_skill_ids:
+                added_skill_ids.add(skill_id)
+                db.add(
+                    TeamSkillRequirement(
+                        team_id=team.id,
+                        skill_id=skill_id,
+                        minimum_proficiency="Intermediate",
+                        required=True,
+                    )
                 )
-            )
 
-    # 4. Create persistent activity log
+    # 4. If required_domains passed (e.g. ["Frontend & UI", "Backend Development", "ML & AI"])
+    if team_in.required_domains:
+        domain_skill_defaults = {
+            "Frontend & UI": "React",
+            "Frontend": "React",
+            "Backend Development": "Python",
+            "Backend": "Python",
+            "Data Systems / Database": "SQL",
+            "Data Systems": "SQL",
+            "Database": "SQL",
+            "ML & AI": "Machine Learning",
+            "AI/ML": "Machine Learning",
+            "UI/UX": "UI/UX",
+            "DevOps": "Docker",
+            "DevOps & Cloud": "Docker",
+        }
+        for d_name in team_in.required_domains:
+            def_skill_name = domain_skill_defaults.get(d_name, d_name)
+            sk = db.query(Skill).filter(Skill.name.ilike(def_skill_name)).first()
+            if not sk:
+                sk = Skill(name=def_skill_name, category=d_name, description=f"Required competency for {d_name}")
+                db.add(sk)
+                db.flush()
+            if sk.id not in added_skill_ids:
+                added_skill_ids.add(sk.id)
+                db.add(
+                    TeamSkillRequirement(
+                        team_id=team.id,
+                        skill_id=sk.id,
+                        domain=d_name,
+                        minimum_proficiency="Intermediate",
+                        required=True,
+                    )
+                )
+
+    # 5. Persistent activity log
     activity = Activity(
         student_id=effective_creator_id,
         activity_type="team",
         title=f"Created team \"{team.name}\"",
-        description=f"Formed project team \"{team.name}\" for collaborative problem solving.",
+        description=f"Formed project team \"{team.name}\" for project \"{team.project_name}\".",
         icon="groups",
         related_entity_type="team",
         related_entity_id=team.id,
@@ -211,9 +355,11 @@ def create_team(
         db.query(Team)
         .options(
             joinedload(Team.creator),
-            joinedload(Team.members).joinedload(TeamMember.student),
-            joinedload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
-            joinedload(Team.invitations),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.skills).joinedload(StudentSkill.skill),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.evidence),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.professional_profile),
+            selectinload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
+            selectinload(Team.invitations),
         )
         .filter(Team.id == team.id)
         .first()
@@ -244,7 +390,6 @@ def get_pending_invitations(
 
     results = []
     for inv in invitations:
-        # Determine skills recipient contributes to team
         recipient_skills = (
             db.query(StudentSkill)
             .options(joinedload(StudentSkill.skill))
@@ -261,6 +406,7 @@ def get_pending_invitations(
                 id=inv.id,
                 team_id=inv.team_id,
                 team_name=inv.team.name if inv.team else None,
+                project_name=inv.team.project_name if inv.team else None,
                 sender_id=inv.sender_id,
                 sender_name=inv.sender.name if inv.sender else None,
                 recipient_id=inv.recipient_id,
@@ -338,7 +484,7 @@ def create_team_invitation(
             detail=f"Recipient student with ID {inv_in.recipient_id} not found.",
         )
 
-    # 5. Create TeamInvitation record
+    # 5. Create persistent invitation
     invitation = TeamInvitation(
         team_id=team_id,
         sender_id=auth_student_id,
@@ -365,29 +511,17 @@ def create_team_invitation(
         tm.role = inv_in.role
 
     # 7. Create persistent recipient notification
-    sender_name = sender.name if sender else "A teammate"
+    sender_name = sender.name if sender else "Team Leader"
     recipient_activity = Activity(
         student_id=inv_in.recipient_id,
         activity_type="team_invitation",
         title=f"Team Invitation: {team.name}",
-        description=f"{sender_name} invited you to join \"{team.name}\" as {inv_in.role}.",
+        description=f"{sender_name} invited you to join \"{team.name}\" ({team.project_name or 'Project'}) as {inv_in.role}.",
         icon="group_add",
         related_entity_type="team_invitation",
         related_entity_id=invitation.id,
     )
     db.add(recipient_activity)
-
-    # 8. Create sender activity log
-    sender_activity = Activity(
-        student_id=auth_student_id,
-        activity_type="team",
-        title=f"Sent invitation to {recipient.name}",
-        description=f"Invited {recipient.name} to join team \"{team.name}\".",
-        icon="send",
-        related_entity_type="team",
-        related_entity_id=team_id,
-    )
-    db.add(sender_activity)
 
     db.commit()
     db.refresh(invitation)
@@ -396,6 +530,7 @@ def create_team_invitation(
         id=invitation.id,
         team_id=invitation.team_id,
         team_name=team.name,
+        project_name=team.project_name,
         sender_id=invitation.sender_id,
         sender_name=sender.name if sender else None,
         recipient_id=invitation.recipient_id,
@@ -501,6 +636,7 @@ def accept_team_invitation(
         id=invitation.id,
         team_id=invitation.team_id,
         team_name=team.name,
+        project_name=team.project_name,
         sender_id=invitation.sender_id,
         sender_name=invitation.sender.name if invitation.sender else None,
         recipient_id=invitation.recipient_id,
@@ -571,6 +707,7 @@ def reject_team_invitation(
         id=invitation.id,
         team_id=invitation.team_id,
         team_name=invitation.team.name if invitation.team else None,
+        project_name=invitation.team.project_name if invitation.team else None,
         sender_id=invitation.sender_id,
         sender_name=invitation.sender.name if invitation.sender else None,
         recipient_id=invitation.recipient_id,
@@ -590,9 +727,11 @@ def get_team(team_id: int, db: Session = Depends(get_db)) -> TeamRead:
         db.query(Team)
         .options(
             joinedload(Team.creator),
-            joinedload(Team.members).joinedload(TeamMember.student),
-            joinedload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
-            joinedload(Team.invitations),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.skills).joinedload(StudentSkill.skill),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.evidence),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.professional_profile),
+            selectinload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
+            selectinload(Team.invitations),
         )
         .filter(Team.id == team_id)
         .first()
@@ -605,66 +744,82 @@ def get_team(team_id: int, db: Session = Depends(get_db)) -> TeamRead:
     return _map_team_to_schema(team, db)
 
 
-@router.post("/{team_id}/members", response_model=TeamMemberRead, status_code=status.HTTP_201_CREATED, summary="Add candidate directly to team")
-def add_team_member(
+@router.put("/{team_id}/requirements", response_model=TeamRead, summary="Update team required capabilities")
+def update_team_requirements(
     team_id: int,
-    member_in: TeamMemberCreate,
+    requirements: List[TeamSkillRequirementCreate],
+    auth_student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
-) -> TeamMemberRead:
-    """Add a student directly as member to a team."""
+) -> TeamRead:
+    """Update team skill requirements (team leader only)."""
     team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Team with ID {team_id} not found.",
         )
-
-    student = db.query(Student).filter(Student.id == member_in.student_id).first()
-    if not student:
+    if team.creator_id != auth_student_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Student with ID {member_in.student_id} not found.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Only the Team Leader can update team requirements.",
         )
 
-    existing_member = (
-        db.query(TeamMember)
-        .filter(TeamMember.team_id == team_id, TeamMember.student_id == member_in.student_id)
+    # Delete existing requirements
+    db.query(TeamSkillRequirement).filter(TeamSkillRequirement.team_id == team_id).delete()
+
+    added_skill_ids = set()
+    for req in requirements:
+        sk_id = req.skill_id
+        if not sk_id and req.skill_name:
+            sk = db.query(Skill).filter(Skill.name.ilike(req.skill_name.strip())).first()
+            if not sk:
+                sk = Skill(name=req.skill_name.strip(), category=req.domain or "Technical", description=f"Skill in {req.skill_name}")
+                db.add(sk)
+                db.flush()
+            sk_id = sk.id
+        
+        if sk_id and sk_id not in added_skill_ids:
+            added_skill_ids.add(sk_id)
+            db.add(
+                TeamSkillRequirement(
+                    team_id=team.id,
+                    skill_id=sk_id,
+                    domain=req.domain,
+                    minimum_proficiency=req.minimum_proficiency or "Intermediate",
+                    required=req.required,
+                )
+            )
+
+    db.commit()
+    db.refresh(team)
+
+    full_team = (
+        db.query(Team)
+        .options(
+            joinedload(Team.creator),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.skills).joinedload(StudentSkill.skill),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.evidence),
+            selectinload(Team.members).joinedload(TeamMember.student).joinedload(Student.professional_profile),
+            selectinload(Team.required_skills).joinedload(TeamSkillRequirement.skill),
+            selectinload(Team.invitations),
+        )
+        .filter(Team.id == team.id)
         .first()
     )
-    if existing_member:
-        existing_member.status = member_in.status
-        existing_member.role = member_in.role
-        existing_member.joined_at = datetime.now(timezone.utc) if member_in.status == "joined" else existing_member.joined_at
-        db.commit()
-        db.refresh(existing_member)
-        member = existing_member
-    else:
-        member = TeamMember(
-            team_id=team_id,
-            student_id=member_in.student_id,
-            role=member_in.role,
-            status=member_in.status,
-            joined_at=datetime.now(timezone.utc) if member_in.status == "joined" else None,
-        )
-        db.add(member)
-        db.commit()
-        db.refresh(member)
-
-    return TeamMemberRead(
-        id=member.id,
-        team_id=member.team_id,
-        student_id=member.student_id,
-        role=member.role,
-        status=member.status,
-        joined_at=member.joined_at,
-        created_at=member.created_at,
-        student_name=student.name,
-    )
+    return _map_team_to_schema(full_team, db)
 
 
 @router.get("/{team_id}/candidates", response_model=List[TeamCandidateRecommendation], summary="Get explainable candidate recommendations for team")
-def get_team_candidates(team_id: int, db: Session = Depends(get_db)) -> List[TeamCandidateRecommendation]:
-    """Retrieve explainable candidate recommendations based on team skill gaps and complementarity."""
+def get_team_candidates(
+    team_id: int,
+    target_role: Optional[str] = None,
+    domain: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> List[TeamCandidateRecommendation]:
+    """
+    Retrieve explainable candidate recommendations based on team skill gaps and complementarity.
+    Supports role-specific recalculation via target_role or domain parameter.
+    """
     team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
         raise HTTPException(
@@ -672,4 +827,9 @@ def get_team_candidates(team_id: int, db: Session = Depends(get_db)) -> List[Tea
             detail=f"Team with ID {team_id} not found.",
         )
 
-    return TeamMatchingService.get_candidate_recommendations_for_team(db, team_id)
+    return TeamMatchingService.get_candidate_recommendations_for_team(
+        db=db,
+        team_id=team_id,
+        target_role=target_role,
+        target_domain=domain,
+    )

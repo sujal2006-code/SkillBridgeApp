@@ -71,26 +71,26 @@ export const InternshipsView: React.FC<InternshipsViewProps> = ({
   }
 
   return (
-    <main className="max-w-[1280px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-24 md:pb-12 min-h-screen">
+    <main className="max-w-[1240px] mx-auto px-4 sm:px-6 py-6 pb-20 md:pb-10 min-h-screen font-['Inter']">
       {/* Header Area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-purple-50 text-[#6d3bd7] border border-purple-200">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="px-2 py-0.2 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-[#6d3bd7] border border-purple-200">
               Deterministic AI Matching
             </span>
           </div>
-          <h1 className="font-['Hanken_Grotesk'] text-2xl sm:text-3xl md:text-[32px] font-bold text-[#191c1e] tracking-tight">
+          <h1 className="font-['Hanken_Grotesk'] text-xl sm:text-2xl font-bold text-[#191c1e] tracking-tight">
             Matching Opportunities
           </h1>
-          <p className="text-sm md:text-base text-slate-600 mt-1">
+          <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
             Evaluated directly from your verified Skill Passport data.
           </p>
         </div>
 
         {/* Search Bar */}
-        <div className="relative w-full md:w-80">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[20px]">
+        <div className="relative w-full md:w-72">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[18px]">
             search
           </span>
           <input
@@ -98,14 +98,14 @@ export const InternshipsView: React.FC<InternshipsViewProps> = ({
             placeholder="Search roles, companies, or skills..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-11 pl-10 pr-4 rounded-full border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:border-[#00687a] focus:ring-2 focus:ring-[#00687a]/20 transition-all shadow-2xs"
+            className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:border-[#00687a] focus:ring-1 focus:ring-[#00687a]/20 transition-all shadow-2xs"
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
             >
-              <span className="material-symbols-outlined text-[16px]">close</span>
+              <span className="material-symbols-outlined text-[15px]">close</span>
             </button>
           )}
         </div>
@@ -169,7 +169,7 @@ export const InternshipsView: React.FC<InternshipsViewProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
           {filteredInternships.map((internship, index) => {
             const isFeatured = index === 0 && internship.matchPercentage >= 90;
             const colSpan = isFeatured ? 'md:col-span-8' : 'md:col-span-6 lg:col-span-4';
@@ -177,19 +177,19 @@ export const InternshipsView: React.FC<InternshipsViewProps> = ({
             return (
               <div
                 key={internship.id}
-                className={`${colSpan} bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden group hover:shadow-lg transition-all flex flex-col justify-between`}
+                className={`${colSpan} bg-white border border-slate-200 rounded-xl p-4 sm:p-4.5 relative overflow-hidden group hover:shadow-sm hover:border-slate-300 transition-all flex flex-col justify-between`}
               >
                 {/* Soft decorative gradient background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-[#00687a]/5 to-transparent opacity-40 pointer-events-none"></div>
 
                 <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex gap-3.5 items-start">
-                      <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-1.5 shrink-0 overflow-hidden shadow-2xs">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex gap-3 items-start">
+                      <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-1 shrink-0 overflow-hidden shadow-2xs">
                         <img
                           src={internship.logo}
                           alt={`${internship.company} logo`}
-                          className="w-full h-full object-cover rounded-lg"
+                          className="w-full h-full object-cover rounded-md"
                         />
                       </div>
                       <div>

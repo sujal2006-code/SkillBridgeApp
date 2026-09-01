@@ -38,7 +38,9 @@ export const MatchModal: React.FC<MatchModalProps> = ({
             </div>
             <div>
               <span className="text-xs uppercase font-bold text-[#00687a] tracking-wider">
-                {isInternship ? 'Explainable Match Analysis' : 'Team Compatibility Score'}
+                {isInternship 
+                  ? 'Explainable Match Analysis' 
+                  : `${(candidateItem?.targetRole || candidateItem?.role || 'Domain').toUpperCase()} MATCH`}
               </span>
               <h3 className="text-xl font-bold text-[#191c1e] font-['Hanken_Grotesk'] leading-tight">
                 {internshipItem ? internshipItem.title : candidateItem?.name}
@@ -46,7 +48,7 @@ export const MatchModal: React.FC<MatchModalProps> = ({
               <p className="text-xs text-slate-500">
                 {internshipItem 
                   ? `${internshipItem.company} • ${internshipItem.location}` 
-                  : `${candidateItem?.role} • ${candidateItem?.level}`}
+                  : `${candidateItem?.professionalRole || candidateItem?.role} • ${candidateItem?.education}`}
               </p>
             </div>
           </div>
@@ -76,8 +78,50 @@ export const MatchModal: React.FC<MatchModalProps> = ({
           </div>
         </div>
 
-        {/* Matched Skills with Supporting Evidence */}
-        {internshipItem?.matchedSkillsDetails && internshipItem.matchedSkillsDetails.length > 0 ? (
+        {/* Candidate 5 Core Requirements Breakdown (Section 16 Format) */}
+        {candidateItem && (
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Core Requirements ({candidateItem.targetRole || 'Domain'}):
+              </span>
+              <span className="text-[11px] font-bold text-[#00687a]">
+                {matchPercentage}% Satisfied
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(candidateItem.coreSkillsFulfilled && candidateItem.coreSkillsFulfilled.length > 0 
+                ? candidateItem.coreSkillsFulfilled 
+                : (candidateItem.skillsContributed || []).map(s => `✓ ${s}`)
+              ).map((skill, idx) => (
+                <div 
+                  key={`f-${idx}`}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-emerald-600">check_circle</span>
+                  <span>{skill.replace(/^✓\s*/, '')}</span>
+                </div>
+              ))}
+
+              {(candidateItem.coreSkillsMissing && candidateItem.coreSkillsMissing.length > 0
+                ? candidateItem.coreSkillsMissing
+                : (candidateItem.missingSkills || []).map(s => `✕ ${s}`)
+              ).map((skill, idx) => (
+                <div 
+                  key={`m-${idx}`}
+                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-900 border border-rose-200 text-xs font-semibold flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-rose-500">cancel</span>
+                  <span>{skill.replace(/^✕\s*/, '')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Matched Skills with Supporting Evidence for Internship */}
+        {internshipItem?.matchedSkillsDetails && internshipItem.matchedSkillsDetails.length > 0 && (
           <div>
             <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider block mb-2">
               Verified Satisfied Skills & Evidence
@@ -107,70 +151,27 @@ export const MatchModal: React.FC<MatchModalProps> = ({
               ))}
             </div>
           </div>
-        ) : candidateItem?.matchedSkillsDetails && candidateItem.matchedSkillsDetails.length > 0 ? (
-          <div>
-            <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider block mb-2">
-              Candidate's Contributed Verified Skills & Evidence
-            </span>
-            <div className="space-y-2">
-              {candidateItem.matchedSkillsDetails.map((ms, idx) => (
-                <div 
-                  key={idx}
-                  className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 flex flex-col gap-1.5"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[15px] text-emerald-700">check_circle</span>
-                      {ms.skill_name}
-                    </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
-                      {ms.student_proficiency} Proficiency
-                    </span>
-                  </div>
-                  {ms.supporting_evidence && ms.supporting_evidence.length > 0 && (
-                    <div className="text-[11px] text-emerald-800 flex items-center gap-1 pl-5">
-                      <span className="material-symbols-outlined text-[13px] text-emerald-600">verified</span>
-                      <span>Supported by verified {ms.supporting_evidence.map(e => e.evidence_type).join(' & ')}: &ldquo;{ms.supporting_evidence[0].title}&rdquo;</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider block mb-2">
-              Verified Skill Alignment
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {item.verifiedSkills.map((skill, idx) => (
-                <span 
-                  key={idx}
-                  className="px-3 py-1 bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-full border border-emerald-200 flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-[14px] text-emerald-600">verified</span>
-                  {skill}
-                </span>
-              ))}
-            </div>
-          </div>
         )}
 
-        {/* Missing Required Skills / Unfilled Team Skills */}
-        {((internshipItem?.missingSkills && internshipItem.missingSkills.length > 0) || (candidateItem?.missingSkills && candidateItem.missingSkills.length > 0)) && (
+        {/* Missing Core Skills */}
+        {((internshipItem?.missingSkills && internshipItem.missingSkills.length > 0) || 
+          (candidateItem && candidateItem.coreSkillsMissing && candidateItem.coreSkillsMissing.length > 0)) && (
           <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl">
             <span className="text-xs font-bold uppercase text-amber-900 tracking-wider block mb-1.5 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px] text-amber-600">warning</span>
-              {isInternship ? 'Missing Skills (Recommended to Develop Next)' : 'Missing Team Requirements'}
+              {isInternship ? 'Missing Skills (Recommended to Develop Next)' : 'Missing Core Requirements'}
             </span>
             <div className="flex flex-wrap gap-1.5">
-              {(internshipItem?.missingSkills || candidateItem?.missingSkills || []).map((skill, idx) => (
+              {(isInternship 
+                ? (internshipItem?.missingSkills || []) 
+                : (candidateItem?.coreSkillsMissing || candidateItem?.missingSkills || [])
+              ).map((skill, idx) => (
                 <span 
                   key={idx}
                   className="px-2.5 py-1 bg-white text-amber-900 text-xs font-semibold rounded-md border border-amber-300 flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-[13px] text-amber-600">close</span>
-                  {skill}
+                  {skill.replace(/^[✕✗]\s*/, '')}
                 </span>
               ))}
             </div>
@@ -181,7 +182,7 @@ export const MatchModal: React.FC<MatchModalProps> = ({
         {candidateItem?.complementarySkills && candidateItem.complementarySkills.length > 0 && (
           <div>
             <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider block mb-2">
-              Complementary Domain Breadth Skills
+              Complementary Verified Skills (Beyond Core 5)
             </span>
             <div className="flex flex-wrap gap-1.5">
               {candidateItem.complementarySkills.map((skill, idx) => (
@@ -192,6 +193,24 @@ export const MatchModal: React.FC<MatchModalProps> = ({
                   <span className="material-symbols-outlined text-[13px] text-[#00687a]">extension</span>
                   {skill}
                 </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Supporting Evidence Breakdown for Candidate */}
+        {candidateItem?.evidenceBreakdown && candidateItem.evidenceBreakdown.length > 0 && (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-xs font-bold uppercase text-slate-700 tracking-wider block mb-2 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px] text-[#00687a]">folder_open</span>
+              Supporting Evidence Artifacts:
+            </span>
+            <div className="space-y-1.5">
+              {candidateItem.evidenceBreakdown.map((evItem, idx) => (
+                <div key={idx} className="text-xs text-slate-800 flex items-start gap-1.5">
+                  <span className="material-symbols-outlined text-[14px] text-emerald-600 mt-0.5">task_alt</span>
+                  <span className="font-medium">{evItem}</span>
+                </div>
               ))}
             </div>
           </div>

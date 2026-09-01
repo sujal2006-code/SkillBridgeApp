@@ -198,7 +198,7 @@ def run_master_test_suite():
     # Check team candidate recommendation
     if teams_list:
         target_team_id = teams_list[0]["id"]
-        cands_resp = client.get(f"/api/teams/{target_team_id}/candidates")
+        cands_resp = client.get(f"/api/teams/{target_team_id}/candidates?target_role=Database%20Specialist")
         assert cands_resp.status_code == 200
         cand_list = cands_resp.json()
         cand_item = next((c for c in cand_list if c["candidate_id"] == new_student_id), None)

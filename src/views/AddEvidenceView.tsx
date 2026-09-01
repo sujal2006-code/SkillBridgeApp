@@ -197,35 +197,35 @@ export const AddEvidenceView: React.FC<AddEvidenceViewProps> = ({
   };
 
   return (
-    <div className="bg-[#f7f9fb] min-h-screen text-[#191c1e] pb-24 md:pb-12 font-['Inter']">
+    <div className="bg-[#f7f9fb] min-h-screen text-[#191c1e] pb-16 font-['Inter']">
       {/* Header */}
-      <header className="bg-white sticky top-0 z-40 border-b border-slate-200 flex items-center px-4 md:px-8 py-3 h-16 shadow-2xs">
+      <header className="bg-white sticky top-0 z-40 border-b border-slate-200 flex items-center px-4 sm:px-6 h-13 shadow-2xs">
         <button
           onClick={() => onNavigate('passport')}
-          className="p-2 mr-3 hover:bg-slate-100 rounded-full transition-colors text-slate-700 flex items-center justify-center cursor-pointer"
+          className="p-1.5 mr-2.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-700 flex items-center justify-center cursor-pointer"
           aria-label="Go back to Skill Passport"
         >
-          <span className="material-symbols-outlined text-[22px]">arrow_back</span>
+          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
         </button>
-        <h1 className="font-['Hanken_Grotesk'] text-xl sm:text-2xl font-bold text-[#191c1e]">
+        <h1 className="font-['Hanken_Grotesk'] text-lg sm:text-xl font-bold text-[#191c1e]">
           Add Evidence
         </h1>
       </header>
 
-      <main className="max-w-[800px] mx-auto w-full px-4 py-6 md:py-10 flex flex-col gap-6">
+      <main className="max-w-[720px] mx-auto w-full px-4 py-4 sm:py-6 flex flex-col gap-4">
         {submitError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">error</span>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs font-semibold flex items-center gap-2">
+            <span className="material-symbols-outlined text-base">error</span>
             <span>{submitError}</span>
           </div>
         )}
 
         {/* Form Container */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-xs">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-2xs">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* 1. Category Selection */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="evidence-category">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider" htmlFor="evidence-category">
                 Evidence Category
               </label>
               <div className="relative">

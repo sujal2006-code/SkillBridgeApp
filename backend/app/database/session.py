@@ -18,13 +18,24 @@ if db_url.startswith("sqlite"):
     )
 else:
     # Production PostgreSQL connection with serverless-friendly pooling & auto-reconnect
-    engine = create_engine(
-        db_url,
-        pool_pre_ping=True,
-        pool_recycle=300,
-        pool_size=5,
-        max_overflow=10,
-    )
+    try:
+        engine = create_engine(
+            db_url,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            pool_size=5,
+            max_overflow=10,
+            connect_args={"connect_timeout": 3},
+        )
+        # Test connection immediately with short timeout
+        with engine.connect() as conn:
+            pass
+    except Exception as e:
+        print(f"[WARN] Remote database connection failed ({e}). Falling back to local SQLite database.")
+        engine = create_engine(
+            "sqlite:///./skillbridge.db",
+            connect_args={"check_same_thread": False},
+        )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -96,7 +96,13 @@ class Settings(BaseSettings):
                             pass
             return f"sqlite:///{tmp_db}"
 
-        return self.DATABASE_URL or "sqlite:///./skillbridge.db"
+        raw_url = self.DATABASE_URL or "sqlite:///./skillbridge.db"
+        if raw_url.startswith("sqlite:///./") or raw_url == "sqlite:///skillbridge.db":
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            db_path = os.path.join(backend_dir, "skillbridge.db")
+            if os.path.exists(db_path):
+                return f"sqlite:///{db_path.replace(os.sep, '/')}"
+        return raw_url
 
     @property
     def is_persistent_db(self) -> bool:

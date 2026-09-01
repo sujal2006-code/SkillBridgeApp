@@ -9,6 +9,7 @@ class Team(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
+    project_name = Column(String, nullable=True)
     description = Column(Text, nullable=True)
     creator_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -42,6 +43,7 @@ class TeamSkillRequirement(Base):
     id = Column(Integer, primary_key=True, index=True)
     team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
     skill_id = Column(Integer, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False)
+    domain = Column(String, nullable=True)
     minimum_proficiency = Column(String, nullable=False, default="Intermediate")
     required = Column(Boolean, nullable=False, default=True)
 

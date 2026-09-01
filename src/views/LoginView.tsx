@@ -130,12 +130,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col justify-center items-center px-4 py-10 font-['Inter'] relative overflow-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col justify-center items-center px-4 py-6 sm:py-8 font-['Inter'] relative overflow-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
       
       {/* Dynamic Animated Ambient Background */}
-      <div className="absolute top-1/4 -left-20 w-80 sm:w-96 h-80 sm:h-96 bg-cyan-600/20 rounded-full blur-[100px] pointer-events-none animate-pulse"></div>
-      <div className="absolute -top-10 right-1/4 w-80 sm:w-96 h-80 sm:h-96 bg-indigo-600/20 rounded-full blur-[110px] pointer-events-none"></div>
-      <div className="absolute bottom-10 right-10 w-72 sm:w-80 h-72 sm:h-80 bg-purple-600/15 rounded-full blur-[90px] pointer-events-none"></div>
+      <div className="absolute top-1/4 -left-20 w-72 h-72 bg-cyan-600/20 rounded-full blur-[90px] pointer-events-none animate-pulse"></div>
+      <div className="absolute -top-10 right-1/4 w-72 h-72 bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-10 right-10 w-64 h-64 bg-purple-600/15 rounded-full blur-[80px] pointer-events-none"></div>
 
       {/* Grid Overlay Texture */}
       <div 
@@ -144,24 +144,24 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       ></div>
 
       {/* Main Glassmorphism Authentication Card */}
-      <div className="bg-slate-900/80 backdrop-blur-2xl border border-slate-800/90 shadow-[0_20px_60px_rgba(0,0,0,0.7)] rounded-3xl max-w-md w-full p-7 sm:p-9 relative z-10 transition-all duration-300 ring-1 ring-white/10">
+      <div className="bg-slate-900/80 backdrop-blur-2xl border border-slate-800/90 shadow-[0_16px_48px_rgba(0,0,0,0.6)] rounded-2xl max-w-sm sm:max-w-md w-full p-5 sm:p-6 relative z-10 transition-all duration-300 ring-1 ring-white/10">
         
         {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="relative mb-3.5 group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-2xl blur-sm opacity-70 group-hover:opacity-100 transition duration-300"></div>
-            <div className="relative w-13 h-13 rounded-2xl bg-gradient-to-br from-[#00687a] to-[#008da6] text-white flex items-center justify-center shadow-lg border border-cyan-400/30">
-              <span className="material-symbols-outlined text-[28px] material-symbols-fill">widgets</span>
+        <div className="flex flex-col items-center text-center mb-4">
+          <div className="relative mb-2.5 group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-xl blur-sm opacity-70 group-hover:opacity-100 transition duration-300"></div>
+            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-[#00687a] to-[#008da6] text-white flex items-center justify-center shadow-md border border-cyan-400/30">
+              <span className="material-symbols-outlined text-[22px] material-symbols-fill">widgets</span>
             </div>
           </div>
           
-          <h1 className="font-['Hanken_Grotesk'] text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-1.5">
+          <h1 className="font-['Hanken_Grotesk'] text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-1.5">
             SkillBridge
           </h1>
-          <p className="text-xs sm:text-sm text-cyan-400/90 font-medium mt-1">
+          <p className="text-xs text-cyan-400/90 font-medium mt-0.5">
             Build your skills. Prove your potential.
           </p>
-          <p className="text-xs text-slate-400 mt-1 max-w-xs leading-relaxed">
+          <p className="text-[11px] text-slate-400 mt-0.5 max-w-xs leading-relaxed">
             {mode === 'login'
               ? 'Enter your credentials to continue your SkillBridge journey.'
               : 'Create your account to build your verified skill passport.'}
@@ -169,31 +169,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex bg-slate-950/70 p-1.5 rounded-2xl mb-6 border border-slate-800/80">
+        <div className="flex bg-slate-950/70 p-1 rounded-xl mb-4 border border-slate-800/80">
           <button
             type="button"
             onClick={() => switchMode('login')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
               mode === 'login'
-                ? 'bg-gradient-to-r from-cyan-600 to-[#00687a] text-white shadow-md shadow-cyan-950/50'
+                ? 'bg-gradient-to-r from-cyan-600 to-[#00687a] text-white shadow-sm shadow-cyan-950/50'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
             id="tab-login"
           >
-            <span className="material-symbols-outlined text-[16px]">login</span>
+            <span className="material-symbols-outlined text-[15px]">login</span>
             <span>Sign In</span>
           </button>
           <button
             type="button"
             onClick={() => switchMode('register')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
               mode === 'register'
-                ? 'bg-gradient-to-r from-cyan-600 to-[#00687a] text-white shadow-md shadow-cyan-950/50'
+                ? 'bg-gradient-to-r from-cyan-600 to-[#00687a] text-white shadow-sm shadow-cyan-950/50'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
             id="tab-register"
           >
-            <span className="material-symbols-outlined text-[16px]">person_add</span>
+            <span className="material-symbols-outlined text-[15px]">person_add</span>
             <span>Create Account</span>
           </button>
         </div>

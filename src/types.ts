@@ -5,6 +5,7 @@ export type ScreenType =
   | 'dashboard' 
   | 'internships' 
   | 'team-builder' 
+  | 'my-team'
   | 'add-evidence' 
   | 'admin'
   | 'admin-login';
@@ -16,6 +17,52 @@ export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
 // ----------------------------------------------------
 // BACKEND API SCHEMAS & DTO INTERFACES
 // ----------------------------------------------------
+
+export interface ApiPlatformStats {
+  verified_students_count: number;
+  verified_skills_count: number;
+  skills_catalog_count: number;
+  active_opportunities_count: number;
+  active_teams_count: number;
+  transparency_notice: string;
+}
+
+export interface ApiDomainProficiency {
+  domain: string;
+  proficiency: string;
+  status: string;
+  verified_skills_count: number;
+  verified_skills: string[];
+  evidence_count: number;
+  is_supported: boolean;
+}
+
+export interface ApiSupportedRole {
+  role: string;
+  description: string;
+  icon: string;
+  is_supported: boolean;
+  required_domains: string[];
+  satisfied_domains: string[];
+  missing_domains: string[];
+  supporting_evidence_domains: ApiDomainProficiency[];
+}
+
+export interface ApiProfessionalProfile {
+  student_id: number;
+  student_name: string;
+  university?: string | null;
+  primary_role: string;
+  overall_proficiency: string;
+  is_role_supported: boolean;
+  secondary_specializations: string[];
+  bio?: string | null;
+  updated_at?: string | null;
+  domain_proficiencies: ApiDomainProficiency[];
+  supported_roles: ApiSupportedRole[];
+  supported_domains_summary: string[];
+  warning?: string | null;
+}
 
 export interface ApiHealthResponse {
   status: string;
@@ -149,6 +196,7 @@ export interface ApiStudent {
   created_at?: string | null;
   skills?: ApiStudentSkill[];
   evidence?: ApiEvidence[];
+  professional_profile?: ApiProfessionalProfile | null;
 }
 
 export interface ApiStudentLoginResponse {
@@ -167,21 +215,28 @@ export interface ApiTeamMember {
   joined_at?: string | null;
   created_at: string;
   student_name?: string | null;
+  professional_role?: string;
+  proficiency?: string;
+  domains?: string[];
+  verified_skills?: string[];
+  evidence_items?: string[];
 }
 
 export interface ApiTeamSkillRequirement {
   id: number;
   team_id: number;
-  skill_id: number;
+  skill_id?: number | null;
+  skill_name?: string | null;
+  domain?: string | null;
   minimum_proficiency: string;
   required: boolean;
-  skill_name?: string | null;
 }
 
 export interface ApiTeamInvitation {
   id: number;
   team_id: number;
   team_name?: string | null;
+  project_name?: string | null;
   sender_id: number;
   sender_name?: string | null;
   recipient_id: number;
@@ -197,6 +252,7 @@ export interface ApiTeamInvitation {
 export interface ApiTeam {
   id: number;
   name: string;
+  project_name?: string | null;
   description?: string | null;
   creator_id: number;
   creator_name?: string | null;
@@ -207,6 +263,8 @@ export interface ApiTeam {
   total_members_count?: number;
   skills_covered?: string[];
   skills_missing?: string[];
+  team_coverage_percentage?: number;
+  domain_coverage?: Record<string, boolean>;
 }
 
 export interface ApiCandidateSkillContribution {
@@ -223,12 +281,19 @@ export interface ApiTeamCandidateRecommendation {
   candidate_name: string;
   university?: string | null;
   role_suggestion: string;
+  professional_role?: string;
+  overall_proficiency?: string;
+  verified_domains?: string[];
   match_score: number;
+  target_role?: string;
   matched_skills: ApiCandidateSkillContribution[];
   skills_contributed: string[];
   complementary_skills: string[];
   verified_skills?: string[];
   missing_team_skills: string[];
+  core_skills_fulfilled?: string[];
+  core_skills_missing?: string[];
+  evidence_breakdown?: string[];
   explanation: string;
 }
 
@@ -316,6 +381,12 @@ export interface TeamCandidate {
   education: string;
   location: string;
   matchedSkillsDetails?: ApiCandidateSkillContribution[];
+  professionalRole?: string;
+  verifiedDomains?: string[];
+  targetRole?: string;
+  evidenceBreakdown?: string[];
+  coreSkillsFulfilled?: string[];
+  coreSkillsMissing?: string[];
 }
 
 export interface VerificationRequest {
